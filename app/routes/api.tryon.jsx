@@ -1,5 +1,5 @@
 import { json } from "@remix-run/node";
-import { nanoBananaTryOn } from "../services/nanoBananaTryOn";
+import { replicateTryOn } from "../services/replicateTryOn.server";
 import db from "../db.server";
 import { isProductAllowed } from "../services/productAccess.server";
 import { canGenerateTryOn, logTryOn } from "../services/shopService.server";
@@ -185,7 +185,7 @@ export const action = async ({ request }) => {
     );
   }
 
-  const result = await nanoBananaTryOn({
+  const result = await replicateTryOn({
     userImage,
     productImage,
     garmentType,
