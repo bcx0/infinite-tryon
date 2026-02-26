@@ -10,7 +10,7 @@ Set these variables in Railway before deploying:
 - `STRIPE_SECRET_KEY`: Stripe secret API key (`sk_live_...` in production).
 - `STRIPE_WEBHOOK_SECRET`: Stripe webhook signing secret (`whsec_...`) for your production webhook endpoint.
 - `STRIPE_PRICE_STARTER`: Stripe Price ID for Starter plan.
-- `STRIPE_PRICE_GROWTH`: Stripe Price ID for Growth (Premium) plan.
+- `STRIPE_PRICE_PREMIUM`: Stripe Price ID for Premium plan.
 - `STRIPE_PRICE_PRO`: Stripe Price ID for Pro plan.
 - `TRYON_API_KEY`: API key used by the try-on backend service.
 - `USE_MOCK`: Set `false` in production to use real try-on generation (`true` keeps mock mode).

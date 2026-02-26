@@ -1,325 +1,450 @@
-import { useEffect } from "react";
-import { useFetcher } from "@remix-run/react";
+import { json } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  Page,
-  Layout,
-  Text,
-  Card,
-  Button,
+  Badge,
+  Banner,
   BlockStack,
-  Box,
-  List,
-  Link,
+  Button,
+  Card,
   InlineStack,
+  Layout,
+  List,
+  Page,
+  ProgressBar,
+  Text,
 } from "@shopify/polaris";
 import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import db from "../db.server";
+import { getLocale } from "../locales";
+import { PLANS } from "../config/plans";
 import { authenticate } from "../shopify.server";
+import { getOrCreateShop, normalizePlanKey } from "../services/shopService.server";
+
+const DASHBOARD_PLAN_KEYS = ["starter", "premium", "pro", "ultimate"];
+const ACTIVITY_DAYS = 30;
+
+function formatMessage(template, values) {
+  return String(template || "").replace(/\{(\w+)\}/g, (_, key) => {
+    return values[key] != null ? String(values[key]) : "";
+  });
+}
+
+function getDayKey(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDayLabel(date) {
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${day}/${month}`;
+}
+
+function normalizeStripeStatus(stripeStatus, trialDaysRemaining) {
+  const normalized = String(stripeStatus || "").trim().toLowerCase();
+
+  if (normalized === "past_due") {
+    return "pastDue";
+  }
+
+  if (
+    normalized === "canceled" ||
+    normalized === "unpaid" ||
+    normalized === "incomplete_expired"
+  ) {
+    return "canceled";
+  }
+
+  if (trialDaysRemaining > 0) {
+    return "trial";
+  }
+
+  return "active";
+}
+
+function getStatusTone(statusKey) {
+  if (statusKey === "active") {
+    return "success";
+  }
+
+  if (statusKey === "trial") {
+    return "info";
+  }
+
+  if (statusKey === "pastDue") {
+    return "warning";
+  }
+
+  return "critical";
+}
+
+function getProgressTone(usageRatio) {
+  if (usageRatio > 0.9) {
+    return "critical";
+  }
+
+  if (usageRatio >= 0.7) {
+    return "warning";
+  }
+
+  return "success";
+}
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
+  const auth = await authenticate.admin(request);
+  const shopDomain = String(
+    auth?.session?.shop || request.headers.get("x-shop-domain") || "",
+  )
+    .trim()
+    .toLowerCase();
 
-  return null;
-};
+  if (!shopDomain) {
+    throw json({ error: "UNAUTHORIZED" }, { status: 401 });
+  }
 
-export const action = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-        },
+  const { lang, messages } = getLocale(request);
+  const shop = await getOrCreateShop(shopDomain);
+  const planKey = normalizePlanKey(shop.plan);
+  const planConfig = PLANS[planKey] || PLANS.free;
+
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  const activeProductsCount = await db.product.count({
+    where: {
+      shopDomain,
+      isActive: true,
+    },
+  });
+
+  const tryOnsMonth = await db.tryOnLog.count({
+    where: {
+      shopDomain,
+      createdAt: {
+        gte: monthStart,
+        lt: monthEnd,
       },
     },
+  });
+
+  const historyStart = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (ACTIVITY_DAYS - 1)),
   );
-  const responseJson = await response.json();
-  const product = responseJson.data.productCreate.product;
-  const variantId = product.variants.edges[0].node.id;
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyRemixTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
+
+  const recentTryOns = await db.tryOnLog.findMany({
+    where: {
+      shopDomain,
+      createdAt: {
+        gte: historyStart,
+        lte: now,
       },
     },
-  );
-  const variantResponseJson = await variantResponse.json();
+    select: {
+      createdAt: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
 
-  return {
-    product: responseJson.data.productCreate.product,
-    variant: variantResponseJson.data.productVariantsBulkUpdate.productVariants,
-  };
+  const byDay = new Map();
+  for (const entry of recentTryOns) {
+    const key = getDayKey(entry.createdAt);
+    byDay.set(key, (byDay.get(key) || 0) + 1);
+  }
+
+  const activity = [];
+  for (let index = ACTIVITY_DAYS - 1; index >= 0; index -= 1) {
+    const day = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - index),
+    );
+    const key = getDayKey(day);
+
+    activity.push({
+      dayKey: key,
+      label: formatDayLabel(day),
+      count: byDay.get(key) || 0,
+    });
+  }
+
+  const trialEndsAt = shop.trialEndsAt ? new Date(shop.trialEndsAt) : null;
+  const trialDaysRemaining =
+    trialEndsAt && trialEndsAt.getTime() > now.getTime()
+      ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+      : 0;
+
+  const statusKey = normalizeStripeStatus(shop.stripeStatus, trialDaysRemaining);
+  const maxTryOns = planConfig.maxTryOnsPerMonth;
+  const usageRatio = maxTryOns > 0 ? tryOnsMonth / maxTryOns : 0;
+
+  return json({
+    lang,
+    messages,
+    shopDomain,
+    planKey,
+    stripeStatus: shop.stripeStatus || null,
+    trialDaysRemaining,
+    statusKey,
+    activeProductsCount,
+    maxProducts: planConfig.maxProducts,
+    tryOnsMonth,
+    maxTryOns,
+    remainingQuota: Math.max(0, maxTryOns - tryOnsMonth),
+    usageRatio,
+    activity,
+    plans: DASHBOARD_PLAN_KEYS.map((key) => ({
+      key,
+      name: PLANS[key].name,
+      priceMonthly: PLANS[key].priceMonthly,
+      maxProducts: PLANS[key].maxProducts,
+      maxTryOnsPerMonth: PLANS[key].maxTryOnsPerMonth,
+    })),
+  });
 };
 
-export default function Index() {
-  const fetcher = useFetcher();
+export default function DashboardPage() {
+  const data = useLoaderData();
   const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
-  const productId = fetcher.data?.product?.id.replace(
-    "gid://shopify/Product/",
-    "",
-  );
+  const [loadingPlan, setLoadingPlan] = useState(null);
 
-  useEffect(() => {
-    if (productId) {
-      shopify.toast.show("Product created");
-    }
-  }, [productId, shopify]);
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  const t = data.messages.dashboard;
+
+  const usagePercent = useMemo(() => {
+    return Math.max(0, Math.min(100, Math.round(data.usageRatio * 100)));
+  }, [data.usageRatio]);
+
+  const statusTone = getStatusTone(data.statusKey);
+  const progressTone = getProgressTone(data.usageRatio);
+
+  const handleUpgrade = useCallback(
+    async (planKey) => {
+      setLoadingPlan(planKey);
+
+      try {
+        const response = await fetch("/api/stripe/checkout", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            planKey,
+            shopDomain: data.shopDomain,
+            returnBaseUrl: `${window.location.origin}/app`,
+          }),
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok || !payload?.checkoutUrl) {
+          shopify.toast.show(payload?.error || t.checkoutError);
+          return;
+        }
+
+        window.location.href = payload.checkoutUrl;
+      } catch {
+        shopify.toast.show(t.checkoutError);
+      } finally {
+        setLoadingPlan(null);
+      }
+    },
+    [data.shopDomain, shopify.toast, t.checkoutError],
+  );
 
   return (
     <Page>
-      <TitleBar title="Remix app template">
-        <button variant="primary" onClick={generateProduct}>
-          Generate a product
-        </button>
-      </TitleBar>
+      <TitleBar title={t.title} />
       <BlockStack gap="500">
         <Layout>
           <Layout.Section>
-            <Card>
-              <BlockStack gap="500">
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Congrats on creating a new Shopify app 🎉
-                  </Text>
-                  <Text variant="bodyMd" as="p">
-                    This embedded app template uses{" "}
-                    <Link
-                      url="https://shopify.dev/docs/apps/tools/app-bridge"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      App Bridge
-                    </Link>{" "}
-                    interface examples like an{" "}
-                    <Link url="/app/additional" removeUnderline>
-                      additional page in the app nav
-                    </Link>
-                    , as well as an{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      Admin GraphQL
-                    </Link>{" "}
-                    mutation demo, to provide a starting point for app
-                    development.
-                  </Text>
-                </BlockStack>
-                <BlockStack gap="200">
-                  <Text as="h3" variant="headingMd">
-                    Get started with products
-                  </Text>
+            <BlockStack gap="300">
+              {data.trialDaysRemaining > 0 ? (
+                <Banner tone="info" title={t.alertTrial}>
                   <Text as="p" variant="bodyMd">
-                    Generate a product with GraphQL and get the JSON output for
-                    that product. Learn more about the{" "}
-                    <Link
-                      url="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-                      target="_blank"
-                      removeUnderline
-                    >
-                      productCreate
-                    </Link>{" "}
-                    mutation in our API references.
+                    {`${data.trialDaysRemaining} ${t.trialDays}`}
                   </Text>
-                </BlockStack>
-                <InlineStack gap="300">
-                  <Button loading={isLoading} onClick={generateProduct}>
-                    Generate a product
-                  </Button>
-                  {fetcher.data?.product && (
-                    <Button
-                      url={`shopify:admin/products/${productId}`}
-                      target="_blank"
-                      variant="plain"
-                    >
-                      View product
-                    </Button>
-                  )}
-                </InlineStack>
-                {fetcher.data?.product && (
-                  <>
-                    <Text as="h3" variant="headingMd">
-                      {" "}
-                      productCreate mutation
+                </Banner>
+              ) : null}
+
+              {data.stripeStatus === "past_due" ? (
+                <Banner tone="warning" title={t.alertPayment} />
+              ) : null}
+
+              {data.usageRatio >= 1 ? (
+                <Banner tone="critical" title={t.quotaExceeded} />
+              ) : data.usageRatio >= 0.9 ? (
+                <Banner tone="warning" title={t.alertQuota} />
+              ) : null}
+            </BlockStack>
+          </Layout.Section>
+
+          <Layout.Section>
+            <Layout>
+              <Layout.Section oneHalf>
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingSm">
+                      {t.plan}
                     </Text>
-                    <Box
-                      padding="400"
-                      background="bg-surface-active"
-                      borderWidth="025"
-                      borderRadius="200"
-                      borderColor="border"
-                      overflowX="scroll"
-                    >
-                      <pre style={{ margin: 0 }}>
-                        <code>
-                          {JSON.stringify(fetcher.data.product, null, 2)}
-                        </code>
-                      </pre>
-                    </Box>
-                    <Text as="h3" variant="headingMd">
-                      {" "}
-                      productVariantsBulkUpdate mutation
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text as="p" variant="bodyLg">
+                        {t.plans[data.planKey] || data.planKey}
+                      </Text>
+                      <Badge tone={statusTone}>{t.status[data.statusKey]}</Badge>
+                    </InlineStack>
+                  </BlockStack>
+                </Card>
+              </Layout.Section>
+
+              <Layout.Section oneHalf>
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingSm">
+                      {t.tryonsMonth}
                     </Text>
-                    <Box
-                      padding="400"
-                      background="bg-surface-active"
-                      borderWidth="025"
-                      borderRadius="200"
-                      borderColor="border"
-                      overflowX="scroll"
-                    >
-                      <pre style={{ margin: 0 }}>
-                        <code>
-                          {JSON.stringify(fetcher.data.variant, null, 2)}
-                        </code>
-                      </pre>
-                    </Box>
-                  </>
-                )}
+                    <Text as="p" variant="bodyLg">
+                      {formatMessage(t.currentPlanLabel, {
+                        used: data.tryOnsMonth,
+                        total: data.maxTryOns,
+                      })}
+                    </Text>
+                    <ProgressBar progress={usagePercent} tone={progressTone} size="small" />
+                  </BlockStack>
+                </Card>
+              </Layout.Section>
+
+              <Layout.Section oneHalf>
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingSm">
+                      {t.activeProducts}
+                    </Text>
+                    <Text as="p" variant="bodyLg">
+                      {formatMessage(t.productsLabel, {
+                        used: data.activeProductsCount,
+                        total: data.maxProducts,
+                      })}
+                    </Text>
+                  </BlockStack>
+                </Card>
+              </Layout.Section>
+
+              <Layout.Section oneHalf>
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingSm">
+                      {t.remainingQuota}
+                    </Text>
+                    <Text as="p" variant="bodyLg">
+                      {formatMessage(t.remainingLabel, { count: data.remainingQuota })}
+                    </Text>
+                  </BlockStack>
+                </Card>
+              </Layout.Section>
+            </Layout>
+          </Layout.Section>
+
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="300">
+                <Text as="h2" variant="headingMd">
+                  {t.activity}
+                </Text>
+                <div style={{ width: "100%", height: 280 }}>
+                  <ResponsiveContainer>
+                    <LineChart data={data.activity}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="label" name={t.chart.xAxis} />
+                      <YAxis allowDecimals={false} name={t.chart.yAxis} />
+                      <Tooltip />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#1f5199"
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </BlockStack>
             </Card>
           </Layout.Section>
-          <Layout.Section variant="oneThird">
-            <BlockStack gap="500">
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    App template specs
-                  </Text>
-                  <BlockStack gap="200">
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Framework
-                      </Text>
-                      <Link
-                        url="https://remix.run"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Remix
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Database
-                      </Text>
-                      <Link
-                        url="https://www.prisma.io/"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        Prisma
-                      </Link>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        Interface
-                      </Text>
-                      <span>
-                        <Link
-                          url="https://polaris.shopify.com"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          Polaris
-                        </Link>
-                        {", "}
-                        <Link
-                          url="https://shopify.dev/docs/apps/tools/app-bridge"
-                          target="_blank"
-                          removeUnderline
-                        >
-                          App Bridge
-                        </Link>
-                      </span>
-                    </InlineStack>
-                    <InlineStack align="space-between">
-                      <Text as="span" variant="bodyMd">
-                        API
-                      </Text>
-                      <Link
-                        url="https://shopify.dev/docs/api/admin-graphql"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphQL API
-                      </Link>
-                    </InlineStack>
-                  </BlockStack>
-                </BlockStack>
-              </Card>
-              <Card>
-                <BlockStack gap="200">
-                  <Text as="h2" variant="headingMd">
-                    Next steps
-                  </Text>
-                  <List>
-                    <List.Item>
-                      Build an{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/getting-started/build-app-example"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        {" "}
-                        example app
-                      </Link>{" "}
-                      to get started
-                    </List.Item>
-                    <List.Item>
-                      Explore Shopify’s API with{" "}
-                      <Link
-                        url="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-                        target="_blank"
-                        removeUnderline
-                      >
-                        GraphiQL
-                      </Link>
-                    </List.Item>
-                  </List>
-                </BlockStack>
-              </Card>
-            </BlockStack>
+
+          <Layout.Section>
+            <Card>
+              <BlockStack gap="300">
+                <Text as="h2" variant="headingMd">
+                  {t.choosePlan}
+                </Text>
+                <Layout>
+                  {data.plans.map((plan) => {
+                    const isCurrentPlan = plan.key === data.planKey;
+                    const isMaxPlan = data.planKey === "ultimate";
+
+                    return (
+                      <Layout.Section oneThird key={plan.key}>
+                        <Card>
+                          <BlockStack gap="200">
+                            <InlineStack align="space-between" blockAlign="center">
+                              <Text as="h3" variant="headingSm">
+                                {t.plans[plan.key] || plan.name}
+                              </Text>
+                              {isCurrentPlan ? (
+                                <Badge tone="info">{t.currentPlanBadge}</Badge>
+                              ) : null}
+                            </InlineStack>
+
+                            <Text as="p" variant="bodyMd">
+                              {formatMessage(t.planCardPrice, {
+                                price: plan.priceMonthly,
+                              })}
+                            </Text>
+
+                            <List>
+                              <List.Item>
+                                {formatMessage(t.planCardProducts, {
+                                  count: plan.maxProducts,
+                                })}
+                              </List.Item>
+                              <List.Item>
+                                {formatMessage(t.planCardTryons, {
+                                  count: plan.maxTryOnsPerMonth,
+                                })}
+                              </List.Item>
+                            </List>
+
+                            {isMaxPlan ? (
+                              <Text as="p" variant="bodyMd">
+                                {t.maxPlan}
+                              </Text>
+                            ) : isCurrentPlan ? null : (
+                              <Button
+                                variant="primary"
+                                loading={loadingPlan === plan.key}
+                                onClick={() => handleUpgrade(plan.key)}
+                              >
+                                {t.upgrade}
+                              </Button>
+                            )}
+                          </BlockStack>
+                        </Card>
+                      </Layout.Section>
+                    );
+                  })}
+                </Layout>
+              </BlockStack>
+            </Card>
           </Layout.Section>
         </Layout>
       </BlockStack>

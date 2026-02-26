@@ -1,7 +1,7 @@
 import { json } from "@remix-run/node";
 import { createCheckoutSession } from "../services/stripeService.server";
 
-const ALLOWED_PLAN_KEYS = new Set(["starter", "growth", "pro"]);
+const ALLOWED_PLAN_KEYS = new Set(["starter", "premium", "pro", "ultimate"]);
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") {
@@ -20,7 +20,7 @@ export const action = async ({ request }) => {
 
   if (!ALLOWED_PLAN_KEYS.has(planKey)) {
     return json(
-      { error: "planKey must be one of starter, growth, pro" },
+      { error: "planKey must be one of starter, premium, pro, ultimate" },
       { status: 400 },
     );
   }
