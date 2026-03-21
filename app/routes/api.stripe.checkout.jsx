@@ -1,7 +1,19 @@
 import { json } from "@remix-run/node";
 import { createCheckoutSession } from "../services/stripeService.server";
+import db from "../db.server";
 
 const ALLOWED_PLAN_KEYS = new Set(["starter", "premium", "pro", "ultimate"]);
+
+async function hasValidSessionForShop(shopDomain) {
+  const session = await db.session.findFirst({
+    where: {
+      shop: shopDomain,
+      OR: [{ expires: null }, { expires: { gt: new Date() } }],
+    },
+    select: { id: true },
+  });
+  return Boolean(session?.id);
+}
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") {
@@ -27,6 +39,11 @@ export const action = async ({ request }) => {
 
   if (!shopDomain) {
     return json({ error: "shopDomain is required" }, { status: 400 });
+  }
+
+  const validSession = await hasValidSessionForShop(shopDomain);
+  if (!validSession) {
+    return json({ error: "Unauthorized: no active session for this shop" }, { status: 401 });
   }
 
   const url = new URL(request.url);

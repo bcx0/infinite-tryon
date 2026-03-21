@@ -1,5 +1,17 @@
 import { json } from "@remix-run/node";
 import { isProductAllowed } from "../services/productAccess.server";
+import db from "../db.server";
+
+async function hasValidSessionForShop(shopDomain) {
+  const session = await db.session.findFirst({
+    where: {
+      shop: shopDomain,
+      OR: [{ expires: null }, { expires: { gt: new Date() } }],
+    },
+    select: { id: true },
+  });
+  return Boolean(session?.id);
+}
 
 export const action = async ({ request }) => {
   if (request.method !== "POST") {
@@ -22,6 +34,11 @@ export const action = async ({ request }) => {
       { error: "shop_id and product_id are required" },
       { status: 400 },
     );
+  }
+
+  const validSession = await hasValidSessionForShop(String(shopId).trim().toLowerCase());
+  if (!validSession) {
+    return json({ error: "Unauthorized: no active session for this shop" }, { status: 401 });
   }
 
   const result = await isProductAllowed(String(shopId), String(productId));
