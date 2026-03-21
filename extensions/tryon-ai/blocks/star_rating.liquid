@@ -53,7 +53,7 @@
   }
 </style>
 
-<div id="tryon-widget" data-shop-id="{{ shop.permanent_domain }}" data-product-id="{{ product.id }}">
+<div id="tryon-widget" data-shop-id="{{ shop.permanent_domain }}" data-product-id="{{ product.id }}" data-backend-url="{{ block.settings.backend_url }}">
   <h3>Essayez ce produit virtuellement !</h3>
   <form id="tryon-form">
     <label for="userPhoto">Votre photo :</label>
@@ -70,6 +70,14 @@
 {
   "name": "Essayage IA",
   "target": "section",
-  "settings": []
+  "settings": [
+    {
+      "type": "text",
+      "id": "backend_url",
+      "label": "Backend URL",
+      "default": "",
+      "info": "URL de votre app Railway (ex: https://your-app.railway.app)"
+    }
+  ]
 }
 {% endschema %}
