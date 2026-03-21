@@ -3,7 +3,8 @@
 client_id = "a4b5548ad3c0d9d23ccfbf787f0892b5"
 name = "tryon-ai"
 handle = "tryon-ai-1"
-application_url = "https://idol-resolved-begin-kid.trycloudflare.com"
+# application_url = "https://idol-resolved-begin-kid.trycloudflare.com"  # URL Cloudflare dev — remplacer par l'URL Railway de prod
+application_url = "https://your-app.up.railway.app"
 embedded = true
 
 [build]
@@ -26,7 +27,8 @@ api_version = "2025-07"
 scopes = "write_products"
 
 [auth]
-redirect_urls = ["https://idol-resolved-begin-kid.trycloudflare.com/auth/callback", "https://idol-resolved-begin-kid.trycloudflare.com/auth/shopify/callback", "https://idol-resolved-begin-kid.trycloudflare.com/api/auth/callback"]
+# redirect_urls ci-dessous : remplacer les URLs Cloudflare par l'URL Railway de prod
+redirect_urls = ["https://your-app.up.railway.app/auth/callback", "https://your-app.up.railway.app/auth/shopify/callback", "https://your-app.up.railway.app/api/auth/callback"]
 
 [pos]
 embedded = false
