@@ -45,3 +45,6 @@ redirect_urls = ["https://your-app.up.railway.app/auth/callback", "https://your-
 
 [pos]
 embedded = false
+
+[app_store]
+  privacy_policy_url = "https://infinite-tryon-production-b5cf.up.railway.app/privacy"
