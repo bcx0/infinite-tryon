@@ -12,5 +12,24 @@ Set these variables in Railway before deploying:
 - `STRIPE_PRICE_STARTER`: Stripe Price ID for Starter plan.
 - `STRIPE_PRICE_PREMIUM`: Stripe Price ID for Premium plan.
 - `STRIPE_PRICE_PRO`: Stripe Price ID for Pro plan.
-- `TRYON_API_KEY`: API key used by the try-on backend service.
+- `STRIPE_PRICE_ULTIMATE`: Stripe Price ID for Ultimate plan.
+- `STRIPE_PRICE_ADDON`: Stripe Price ID for the add-on (extra try-ons).
+- `REPLICATE_API_TOKEN`: API token for Replicate (used for IDM-VTON try-on generation).
 - `USE_MOCK`: Set `false` in production to use real try-on generation (`true` keeps mock mode).
+- `RUN_MIGRATIONS`: Set `true` on the primary instance only to run `prisma migrate deploy` on startup (prevents race conditions in multi-instance deployments).
+
+## Stripe Webhook Endpoint
+
+In the Stripe Dashboard, configure a webhook endpoint pointing to:
+
+```
+https://your-app.up.railway.app/api/stripe/webhook
+```
+
+Events to enable:
+- `checkout.session.completed`
+- `customer.subscription.updated`
+- `customer.subscription.deleted`
+- `invoice.payment_failed`
+
+Copy the generated webhook signing secret (`whsec_...`) and set it as `STRIPE_WEBHOOK_SECRET` in Railway.
