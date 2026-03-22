@@ -19,9 +19,10 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>TryOn AI — Virtual Try-On for Shopify</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Let your customers virtually try on your products before they buy.
+          Powered by AI, integrated directly into your Shopify store.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -37,16 +38,16 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>AI-powered try-on</strong>. Customers upload their photo and
+            see themselves wearing your products in seconds.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Easy product activation</strong>. Select which products get
+            the try-on button — no code required.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Flexible plans</strong>. Start free, upgrade as you grow.
+            Starter, Premium, Pro and Ultimate plans available.
           </li>
         </ul>
       </div>
