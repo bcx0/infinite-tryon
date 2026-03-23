@@ -208,6 +208,7 @@ export const loader = async ({ request }) => {
       priceMonthly: PLANS[key].priceMonthly,
       maxProducts: PLANS[key].maxProducts,
       maxTryOnsPerMonth: PLANS[key].maxTryOnsPerMonth,
+      highlighted: PLANS[key].highlighted || false,
     })),
   });
 };
@@ -309,6 +310,22 @@ export default function DashboardPage() {
                 <Card>
                   <BlockStack gap="200">
                     <Text as="h2" variant="headingSm">
+                      {t.activeProducts}
+                    </Text>
+                    <Text as="p" variant="bodyLg">
+                      {formatMessage(t.productsLabel, {
+                        used: data.activeProductsCount,
+                        total: data.maxProducts,
+                      })}
+                    </Text>
+                  </BlockStack>
+                </Card>
+              </Layout.Section>
+
+              <Layout.Section oneHalf>
+                <Card>
+                  <BlockStack gap="200">
+                    <Text as="h2" variant="headingSm">
                       {t.tryonsMonth}
                     </Text>
                     <Text as="p" variant="bodyLg">
@@ -318,22 +335,6 @@ export default function DashboardPage() {
                       })}
                     </Text>
                     <ProgressBar progress={usagePercent} tone={progressTone} size="small" />
-                  </BlockStack>
-                </Card>
-              </Layout.Section>
-
-              <Layout.Section oneHalf>
-                <Card>
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingSm">
-                      {t.activeProducts}
-                    </Text>
-                    <Text as="p" variant="bodyLg">
-                      {formatMessage(t.productsLabel, {
-                        used: data.activeProductsCount,
-                        total: data.maxProducts,
-                      })}
-                    </Text>
                   </BlockStack>
                 </Card>
               </Layout.Section>
@@ -400,9 +401,14 @@ export default function DashboardPage() {
                               <Text as="h3" variant="headingSm">
                                 {t.plans[plan.key] || plan.name}
                               </Text>
-                              {isCurrentPlan ? (
-                                <Badge tone="info">{t.currentPlanBadge}</Badge>
-                              ) : null}
+                              <InlineStack gap="100">
+                                {plan.highlighted ? (
+                                  <Badge tone="success">{t.planHighlightBadge}</Badge>
+                                ) : null}
+                                {isCurrentPlan ? (
+                                  <Badge tone="info">{t.currentPlanBadge}</Badge>
+                                ) : null}
+                              </InlineStack>
                             </InlineStack>
 
                             <Text as="p" variant="bodyMd">
@@ -411,16 +417,29 @@ export default function DashboardPage() {
                               })}
                             </Text>
 
+                            <Text as="p" variant="bodySm" tone="subdued">
+                              {t.planValueProp}
+                            </Text>
+
                             <List>
                               <List.Item>
-                                {formatMessage(t.planCardProducts, {
-                                  count: plan.maxProducts,
-                                })}
+                                <Text as="span" fontWeight="semibold">
+                                  {formatMessage(t.planCardProducts, {
+                                    count: plan.maxProducts,
+                                  })}
+                                </Text>
                               </List.Item>
                               <List.Item>
-                                {formatMessage(t.planCardTryons, {
-                                  count: plan.maxTryOnsPerMonth,
-                                })}
+                                <Text as="span" tone="subdued">
+                                  {formatMessage(t.planCardTryons, {
+                                    count: plan.maxTryOnsPerMonth,
+                                  })}
+                                </Text>
+                              </List.Item>
+                              <List.Item>
+                                <Text as="span" variant="bodySm" tone="subdued">
+                                  {t.planCardFairUse}
+                                </Text>
                               </List.Item>
                             </List>
 
