@@ -2,7 +2,7 @@ import Replicate from "replicate";
 
 const MODEL_SLUG = "cuuupid/idm-vton";
 const TIMEOUT_MS = 120000;
-const POLL_INTERVAL_MS = 1500;
+const POLL_INTERVAL_MS = 2500;
 const DEFAULT_MOCK_IMAGE_URL =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800";
 
@@ -23,7 +23,12 @@ function getReplicateClient() {
   return new Replicate({ auth: token });
 }
 
-async function getLatestModelVersionId(replicate) {
+async function getModelVersionId(replicate) {
+  const pinned = process.env.REPLICATE_MODEL_VERSION;
+  if (pinned) {
+    return pinned;
+  }
+
   let model = null;
 
   try {
@@ -87,7 +92,7 @@ export async function generateTryOn(personImageUrl, garmentImageUrl) {
 
   try {
     const replicate = getReplicateClient();
-    const version = await getLatestModelVersionId(replicate);
+    const version = await getModelVersionId(replicate);
 
     const prediction = await replicate.predictions.create({
       version,
@@ -97,7 +102,7 @@ export async function generateTryOn(personImageUrl, garmentImageUrl) {
         garment_des: "garment",
         is_checked: true,
         is_checked_crop: false,
-        denoise_steps: 30,
+        denoise_steps: 20,
         seed: 42,
       },
     });

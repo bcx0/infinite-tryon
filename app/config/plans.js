@@ -22,17 +22,17 @@ export const PLANS = {
   },
   pro: {
     name: "Pro",
-    priceMonthly: 59,
+    priceMonthly: 89,
     stripePriceId: process.env.STRIPE_PRICE_PRO,
     maxProducts: 15,
-    maxTryOnsPerMonth: 1000,
+    maxTryOnsPerMonth: 750,
   },
   ultimate: {
     name: "Ultimate",
-    priceMonthly: 119,
+    priceMonthly: 179,
     stripePriceId: process.env.STRIPE_PRICE_ULTIMATE,
     maxProducts: 999,
-    maxTryOnsPerMonth: 3000,
+    maxTryOnsPerMonth: 2000,
   },
 };
 
