@@ -50,5 +50,38 @@ export const fr = {
     addonCheckoutError: "Impossible d'activer l'add-on",
     addonActivatedToast: "Add-on active avec succes !",
     addonManageHint: "Pour annuler l'add-on, utilisez le portail de facturation."
+  },
+  products: {
+    title: "Produits",
+    resourceSingular: "produit",
+    resourcePlural: "produits",
+    deactivate: "Desactiver",
+    columnProduct: "Produit",
+    columnActivatedAt: "Active le",
+    columnStatus: "Statut",
+    columnActions: "Actions",
+    statusActive: "Actif",
+    slotsUsed: "slots produits utilises",
+    addonActive: "add-on actif (+2 slots)",
+    emptyHeading: "Aucun produit active",
+    emptyDescription: "Les produits actives pour l'essayage virtuel apparaitront ici. Ouvrez une fiche produit dans votre boutique pour activer le widget try-on."
+  },
+  addon: {
+    pageTitle: "Add-on produits",
+    title: "Add-on produits supplementaires",
+    description: "Ajoutez des produits supplementaires et des essayages a votre plan actuel, sans changer de forfait.",
+    activeBadge: "Actif",
+    inactiveBadge: "Inactif",
+    extraProducts: "produits supplementaires",
+    extraTryOns: "essayages supplementaires / mois",
+    perMonth: "mois",
+    activeTitle: "Add-on actif",
+    activeBody: "Vos produits et essayages supplementaires sont inclus dans votre quota mensuel.",
+    manageButton: "Gerer via le portail de facturation",
+    activateButton: "Activer l'add-on",
+    requiresPlanTitle: "Plan payant requis",
+    requiresPlanBody: "Vous devez etre abonne a un plan payant pour activer l'add-on.",
+    checkoutError: "Impossible d'activer l'add-on",
+    portalError: "Impossible d'ouvrir le portail de facturation"
   }
 };

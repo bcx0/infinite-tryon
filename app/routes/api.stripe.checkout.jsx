@@ -4,6 +4,32 @@ import db from "../db.server";
 
 const ALLOWED_PLAN_KEYS = new Set(["starter", "premium", "pro", "ultimate"]);
 
+// 5 checkout attempts per shop per hour — prevents session spam
+const CHECKOUT_RATE_LIMIT_MAX = 5;
+const CHECKOUT_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const checkoutRateLimit = new Map();
+
+function checkAndIncrementCheckoutRateLimit(shopDomain) {
+  const now = Date.now();
+  const current = checkoutRateLimit.get(shopDomain);
+
+  if (!current || now - current.windowStart >= CHECKOUT_RATE_LIMIT_WINDOW_MS) {
+    checkoutRateLimit.set(shopDomain, { count: 1, windowStart: now });
+    return { limited: false };
+  }
+
+  if (current.count >= CHECKOUT_RATE_LIMIT_MAX) {
+    const retryAfterMs = CHECKOUT_RATE_LIMIT_WINDOW_MS - (now - current.windowStart);
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+    };
+  }
+
+  current.count += 1;
+  return { limited: false };
+}
+
 async function hasValidSessionForShop(shopDomain) {
   const session = await db.session.findFirst({
     where: {
@@ -44,6 +70,17 @@ export const action = async ({ request }) => {
   const validSession = await hasValidSessionForShop(shopDomain);
   if (!validSession) {
     return json({ error: "Unauthorized: no active session for this shop" }, { status: 401 });
+  }
+
+  const rateLimit = checkAndIncrementCheckoutRateLimit(shopDomain);
+  if (rateLimit.limited) {
+    return json(
+      {
+        error: "Too many checkout attempts. Please wait before trying again.",
+        retry_after_seconds: rateLimit.retryAfterSeconds,
+      },
+      { status: 429 },
+    );
   }
 
   const url = new URL(request.url);

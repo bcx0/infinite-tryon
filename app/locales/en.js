@@ -50,5 +50,38 @@ export const en = {
     addonCheckoutError: "Unable to activate the add-on",
     addonActivatedToast: "Add-on activated successfully!",
     addonManageHint: "To cancel the add-on, use the billing portal."
+  },
+  products: {
+    title: "Products",
+    resourceSingular: "product",
+    resourcePlural: "products",
+    deactivate: "Deactivate",
+    columnProduct: "Product",
+    columnActivatedAt: "Activated on",
+    columnStatus: "Status",
+    columnActions: "Actions",
+    statusActive: "Active",
+    slotsUsed: "product slots used",
+    addonActive: "add-on active (+2 slots)",
+    emptyHeading: "No products activated",
+    emptyDescription: "Products activated for virtual try-on will appear here. Open a product page in your store to activate the try-on widget."
+  },
+  addon: {
+    pageTitle: "Products add-on",
+    title: "Extra products add-on",
+    description: "Add extra product slots and try-ons to your current plan without switching tiers.",
+    activeBadge: "Active",
+    inactiveBadge: "Inactive",
+    extraProducts: "extra products",
+    extraTryOns: "extra try-ons / month",
+    perMonth: "month",
+    activeTitle: "Add-on active",
+    activeBody: "Your extra products and try-ons are included in your monthly quota.",
+    manageButton: "Manage via billing portal",
+    activateButton: "Activate add-on",
+    requiresPlanTitle: "Paid plan required",
+    requiresPlanBody: "You need an active paid plan to activate the add-on.",
+    checkoutError: "Unable to activate the add-on",
+    portalError: "Unable to open the billing portal"
   }
 };

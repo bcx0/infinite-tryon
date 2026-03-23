@@ -1,11 +1,13 @@
 import { json } from "@remix-run/node";
 import { useLoaderData, useSubmit } from "@remix-run/react";
 import {
+  Badge,
   BlockStack,
   Button,
   Card,
   EmptyState,
   IndexTable,
+  InlineStack,
   Layout,
   Page,
   Text,
@@ -13,29 +15,37 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import {
-  deactivateProductAccess,
-  getPlanStatus,
-  listActiveProducts,
-} from "../services/productAccess.server";
+import { getPlanStatus } from "../services/productAccess.server";
+import { getLocale } from "../locales";
+import db from "../db.server";
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr);
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+}
 
 export const loader = async ({ request }) => {
   const auth = await authenticate.admin(request);
   const shopDomain = String(auth?.session?.shop || "").trim().toLowerCase();
+  const { messages } = getLocale(request);
 
-  const [productIds, planStatus] = await Promise.all([
-    listActiveProducts(shopDomain),
+  const [products, planStatus] = await Promise.all([
+    db.product.findMany({
+      where: { shopDomain, isActive: true },
+      select: { productId: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    }),
     getPlanStatus(shopDomain),
   ]);
 
-  const products = productIds.map((id) => ({
-    id: String(id),
-    name: `Produit ${id}`,
-    tryOnsRemaining: planStatus.maxProductsAllowed > 0 ? "Illimité" : "0",
-    status: "Actif",
-  }));
-
-  return json({ products, planStatus });
+  return json({
+    messages,
+    products: products.map(({ productId, createdAt }) => ({
+      id: productId,
+      activatedAt: formatDate(createdAt),
+    })),
+    planStatus,
+  });
 };
 
 export const action = async ({ request }) => {
@@ -49,16 +59,20 @@ export const action = async ({ request }) => {
     return json({ error: "productId is required" }, { status: 400 });
   }
 
-  await deactivateProductAccess(shopDomain, String(productId));
+  await db.product.updateMany({
+    where: { shopDomain, productId: String(productId), isActive: true },
+    data: { isActive: false },
+  });
 
   return json({ success: true });
 };
 
 export default function ProductsPage() {
-  const { products } = useLoaderData();
+  const { products, planStatus, messages } = useLoaderData();
+  const t = messages.products;
   const submit = useSubmit();
 
-  const resourceName = { singular: "produit", plural: "produits" };
+  const resourceName = { singular: t.resourceSingular, plural: t.resourcePlural };
   const { selectedResources, allResourcesSelected, handleSelectionChange } =
     useIndexResourceState(products);
 
@@ -68,7 +82,7 @@ export default function ProductsPage() {
     submit(formData, { method: "post" });
   }
 
-  const rowMarkup = products.map(({ id, name, tryOnsRemaining, status }, index) => (
+  const rowMarkup = products.map(({ id, activatedAt }, index) => (
     <IndexTable.Row
       id={id}
       key={id}
@@ -77,18 +91,16 @@ export default function ProductsPage() {
     >
       <IndexTable.Cell>
         <Text variant="bodyMd" fontWeight="bold" as="span">
-          {name}
+          {id}
         </Text>
       </IndexTable.Cell>
-      <IndexTable.Cell>{tryOnsRemaining}</IndexTable.Cell>
-      <IndexTable.Cell>{status}</IndexTable.Cell>
+      <IndexTable.Cell>{activatedAt}</IndexTable.Cell>
       <IndexTable.Cell>
-        <Button
-          variant="plain"
-          tone="critical"
-          onClick={() => handleDeactivate(id)}
-        >
-          Désactiver
+        <Badge tone="success">{t.statusActive}</Badge>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        <Button variant="plain" tone="critical" onClick={() => handleDeactivate(id)}>
+          {t.deactivate}
         </Button>
       </IndexTable.Cell>
     </IndexTable.Row>
@@ -96,41 +108,44 @@ export default function ProductsPage() {
 
   return (
     <Page>
-      <TitleBar title="Produits" />
+      <TitleBar title={t.title} />
       <Layout>
         <Layout.Section>
-          <Card padding="0">
-            {products.length === 0 ? (
-              <EmptyState
-                heading="Aucun produit activé"
-                image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
-              >
-                <Text as="p" variant="bodyMd">
-                  Les produits activés pour l'essayage virtuel apparaîtront ici.
-                  Ouvrez une fiche produit dans votre boutique pour activer le widget try-on.
-                </Text>
-              </EmptyState>
-            ) : (
-              <BlockStack>
-                <IndexTable
-                  resourceName={resourceName}
-                  itemCount={products.length}
-                  selectedItemsCount={
-                    allResourcesSelected ? "All" : selectedResources.length
-                  }
-                  onSelectionChange={handleSelectionChange}
-                  headings={[
-                    { title: "Produit" },
-                    { title: "Try-ons restants" },
-                    { title: "Statut" },
-                    { title: "Actions" },
-                  ]}
+          <BlockStack gap="300">
+            <Text as="p" variant="bodySm" tone="subdued">
+              {`${planStatus.activeProductsCount} / ${planStatus.maxProductsAllowed} ${t.slotsUsed}`}
+              {planStatus.addonActive ? ` · ${t.addonActive}` : ""}
+            </Text>
+            <Card padding="0">
+              {products.length === 0 ? (
+                <EmptyState
+                  heading={t.emptyHeading}
+                  image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
                 >
-                  {rowMarkup}
-                </IndexTable>
-              </BlockStack>
-            )}
-          </Card>
+                  <Text as="p" variant="bodyMd">
+                    {t.emptyDescription}
+                  </Text>
+                </EmptyState>
+              ) : (
+                <BlockStack>
+                  <IndexTable
+                    resourceName={resourceName}
+                    itemCount={products.length}
+                    selectedItemsCount={allResourcesSelected ? "All" : selectedResources.length}
+                    onSelectionChange={handleSelectionChange}
+                    headings={[
+                      { title: t.columnProduct },
+                      { title: t.columnActivatedAt },
+                      { title: t.columnStatus },
+                      { title: t.columnActions },
+                    ]}
+                  >
+                    {rowMarkup}
+                  </IndexTable>
+                </BlockStack>
+              )}
+            </Card>
+          </BlockStack>
         </Layout.Section>
       </Layout>
     </Page>
