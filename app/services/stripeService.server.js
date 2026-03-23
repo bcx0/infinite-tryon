@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { PLANS } from "../config/plans";
+import { PLANS, ADDON } from "../config/plans";
 import db from "../db.server";
 import {
   getOrCreateShop,
@@ -35,7 +35,12 @@ function planFromStripePriceId(priceId) {
     ([, plan]) => plan.stripePriceId && plan.stripePriceId === priceId,
   );
 
-  return entry ? entry[0] : "free";
+  return entry ? entry[0] : null;
+}
+
+function isAddonPriceId(priceId) {
+  const addonPriceId = process.env.STRIPE_PRICE_ADDON;
+  return Boolean(addonPriceId && priceId === addonPriceId);
 }
 
 function dateFromStripeTimestamp(unixSeconds) {
@@ -44,6 +49,34 @@ function dateFromStripeTimestamp(unixSeconds) {
   }
 
   return new Date(unixSeconds * 1000);
+}
+
+// Deactivate excess products when a merchant downgrades.
+// Keeps the oldest active products (FIFO) up to maxProducts, deactivates the rest.
+async function enforceProductLimit(shopDomain, maxProducts) {
+  const activeProducts = await db.product.findMany({
+    where: { shopDomain, isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { productId: true },
+  });
+
+  if (activeProducts.length <= maxProducts) return;
+
+  const toDeactivate = activeProducts.slice(maxProducts);
+
+  await db.product.updateMany({
+    where: {
+      shopDomain,
+      productId: { in: toDeactivate.map((p) => p.productId) },
+    },
+    data: { isActive: false },
+  });
+
+  console.info("[stripe] downgrade: deactivated excess products", {
+    shopDomain,
+    deactivated: toDeactivate.length,
+    maxProductsAllowed: maxProducts,
+  });
 }
 
 export async function createOrGetCustomer(shopDomain, email) {
@@ -108,6 +141,48 @@ export async function createCheckoutSession(shopDomain, planKey, returnBaseUrl) 
   return session;
 }
 
+export async function createAddonCheckoutSession(shopDomain, returnBaseUrl) {
+  const stripe = getStripeClient();
+  const addonPriceId = process.env.STRIPE_PRICE_ADDON;
+  if (!addonPriceId) {
+    throw new Error("Missing STRIPE_PRICE_ADDON");
+  }
+
+  const shop = await getOrCreateShop(shopDomain);
+  if (!shop.stripeCustomerId) {
+    throw new Error("No Stripe customer found — subscribe to a paid plan first");
+  }
+
+  if (shop.addonActive) {
+    throw new Error("Add-on is already active for this shop");
+  }
+
+  const cleanedReturnBaseUrl = String(returnBaseUrl || "").replace(/\/$/, "");
+  if (!cleanedReturnBaseUrl) {
+    throw new Error("returnBaseUrl is required");
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer: shop.stripeCustomerId,
+    line_items: [{ price: addonPriceId, quantity: 1 }],
+    metadata: {
+      shopDomain: shop.shopDomain,
+      isAddon: "true",
+    },
+    subscription_data: {
+      metadata: {
+        shopDomain: shop.shopDomain,
+        isAddon: "true",
+      },
+    },
+    success_url: `${cleanedReturnBaseUrl}?checkout=addon_success`,
+    cancel_url: `${cleanedReturnBaseUrl}?checkout=cancel`,
+  });
+
+  return session;
+}
+
 export async function createPortalSession(shopDomain, returnUrl) {
   const stripe = getStripeClient();
   const shop = await getOrCreateShop(shopDomain);
@@ -138,7 +213,7 @@ export async function handleWebhookEvent(rawBody, signature) {
     case "checkout.session.completed": {
       const session = event.data.object;
       const shopDomain = session.metadata?.shopDomain;
-      const planKey = normalizePlanKey(session.metadata?.planKey);
+      const isAddon = session.metadata?.isAddon === "true";
       const subscriptionId =
         typeof session.subscription === "string"
           ? session.subscription
@@ -148,7 +223,23 @@ export async function handleWebhookEvent(rawBody, signature) {
           ? session.customer
           : session.customer?.id;
 
-      if (shopDomain && subscriptionId) {
+      if (!shopDomain || !subscriptionId) break;
+
+      if (isAddon) {
+        // Addon subscription: activate addon, store its subscription ID
+        await db.shop.update({
+          where: { shopDomain: shopDomain.toLowerCase() },
+          data: {
+            addonActive: true,
+            addonSubscriptionId: subscriptionId,
+            stripeCustomerId: customerId || undefined,
+          },
+        });
+
+        console.info("[stripe] addon activated", { shopDomain, subscriptionId });
+      } else {
+        // Main plan subscription
+        const planKey = normalizePlanKey(session.metadata?.planKey);
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         const periodEnd = dateFromStripeTimestamp(subscription.current_period_end);
 
@@ -174,28 +265,56 @@ export async function handleWebhookEvent(rawBody, signature) {
           ? subscription.customer
           : subscription.customer?.id;
 
-      if (customerId) {
-        const firstItem = subscription.items?.data?.[0];
-        const planKey = planFromStripePriceId(firstItem?.price?.id);
-        const periodEnd = dateFromStripeTimestamp(subscription.current_period_end);
-        const shop = await db.shop.findFirst({
-          where: { stripeCustomerId: customerId },
-          select: { shopDomain: true },
+      if (!customerId) break;
+
+      const shop = await db.shop.findFirst({
+        where: { stripeCustomerId: customerId },
+        select: { shopDomain: true, addonSubscriptionId: true, addonActive: true },
+      });
+
+      if (!shop?.shopDomain) break;
+
+      // If this is the addon subscription, ignore plan logic
+      const isAddonSub =
+        subscription.id === shop.addonSubscriptionId ||
+        subscription.items?.data?.some((item) => isAddonPriceId(item.price?.id));
+
+      if (isAddonSub) {
+        // Sync addon active state with subscription status
+        const addonNowActive = subscription.status === "active" || subscription.status === "trialing";
+        await db.shop.update({
+          where: { shopDomain: shop.shopDomain },
+          data: { addonActive: addonNowActive },
         });
-
-        if (shop?.shopDomain) {
-          await db.shop.update({
-            where: { shopDomain: shop.shopDomain },
-            data: {
-              stripeSubscriptionId: subscription.id,
-              stripeStatus: subscription.status,
-              currentPeriodEnd: periodEnd,
-            },
-          });
-
-          await setShopPlan(shop.shopDomain, planKey);
-        }
+        break;
       }
+
+      // Main plan subscription updated
+      const firstItem = subscription.items?.data?.[0];
+      const newPlanKey = planFromStripePriceId(firstItem?.price?.id) || "free";
+      const periodEnd = dateFromStripeTimestamp(subscription.current_period_end);
+
+      await db.shop.update({
+        where: { shopDomain: shop.shopDomain },
+        data: {
+          stripeSubscriptionId: subscription.id,
+          stripeStatus: subscription.status,
+          currentPeriodEnd: periodEnd,
+        },
+      });
+
+      await setShopPlan(shop.shopDomain, newPlanKey);
+
+      // Enforce product limit after plan change (handles downgrades)
+      const newPlanConfig = PLANS[newPlanKey] || PLANS.free;
+      const updatedShop = await db.shop.findUnique({
+        where: { shopDomain: shop.shopDomain },
+        select: { addonActive: true },
+      });
+      const effectiveMax =
+        newPlanConfig.maxProducts + (updatedShop?.addonActive ? ADDON.extraProducts : 0);
+      await enforceProductLimit(shop.shopDomain, effectiveMax);
+
       break;
     }
 
@@ -206,24 +325,47 @@ export async function handleWebhookEvent(rawBody, signature) {
           ? subscription.customer
           : subscription.customer?.id;
 
-      if (customerId) {
-        const shop = await db.shop.findFirst({
-          where: { stripeCustomerId: customerId },
-          select: { shopDomain: true },
+      if (!customerId) break;
+
+      const shop = await db.shop.findFirst({
+        where: { stripeCustomerId: customerId },
+        select: { shopDomain: true, addonSubscriptionId: true },
+      });
+
+      if (!shop?.shopDomain) break;
+
+      const isAddonSub =
+        subscription.id === shop.addonSubscriptionId ||
+        subscription.items?.data?.some((item) => isAddonPriceId(item.price?.id));
+
+      if (isAddonSub) {
+        // Addon canceled: deactivate addon, enforce product limit
+        const currentShop = await db.shop.findUnique({
+          where: { shopDomain: shop.shopDomain },
+          select: { plan: true },
+        });
+        const planConfig = PLANS[normalizePlanKey(currentShop?.plan)] || PLANS.free;
+
+        await db.shop.update({
+          where: { shopDomain: shop.shopDomain },
+          data: { addonActive: false, addonSubscriptionId: null },
         });
 
-        if (shop?.shopDomain) {
-          await db.shop.update({
-            where: { shopDomain: shop.shopDomain },
-            data: {
-              stripeSubscriptionId: null,
-              stripeStatus: "canceled",
-              currentPeriodEnd: null,
-            },
-          });
+        await enforceProductLimit(shop.shopDomain, planConfig.maxProducts);
+        console.info("[stripe] addon canceled", { shopDomain: shop.shopDomain });
+      } else {
+        // Main plan canceled: downgrade to free
+        await db.shop.update({
+          where: { shopDomain: shop.shopDomain },
+          data: {
+            stripeSubscriptionId: null,
+            stripeStatus: "canceled",
+            currentPeriodEnd: null,
+          },
+        });
 
-          await setShopPlan(shop.shopDomain, "free");
-        }
+        await setShopPlan(shop.shopDomain, "free");
+        await enforceProductLimit(shop.shopDomain, PLANS.free.maxProducts);
       }
       break;
     }

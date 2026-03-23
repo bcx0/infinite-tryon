@@ -31,6 +31,7 @@ export const fr = {
     planValueProp: "Economisez le cout d'un shooting photo chaque mois",
     currentPlanBadge: "Plan actuel",
     checkoutError: "Impossible de creer la session de paiement",
+    checkoutSuccess: "Plan active avec succes !",
     chart: {
       xAxis: "Date",
       yAxis: "Essayages"
@@ -41,6 +42,13 @@ export const fr = {
       premium: "Premium",
       pro: "Pro",
       ultimate: "Ultimate"
-    }
+    },
+    addonTitle: "Add-on produits supplementaires",
+    addonDescription: "+{products} produits · +{tryons} essayages/mois · {price} EUR/mois",
+    addonActiveBadge: "Actif",
+    addonAdd: "Ajouter l'add-on",
+    addonCheckoutError: "Impossible d'activer l'add-on",
+    addonActivatedToast: "Add-on active avec succes !",
+    addonManageHint: "Pour annuler l'add-on, utilisez le portail de facturation."
   }
 };

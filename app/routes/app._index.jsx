@@ -26,7 +26,7 @@ import {
 } from "recharts";
 import db from "../db.server";
 import { getLocale } from "../locales";
-import { PLANS } from "../config/plans";
+import { PLANS, ADDON } from "../config/plans";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop, normalizePlanKey } from "../services/shopService.server";
 
@@ -111,10 +111,17 @@ export const loader = async ({ request }) => {
     throw json({ error: "UNAUTHORIZED" }, { status: 401 });
   }
 
+  const url = new URL(request.url);
+  const checkoutResult = url.searchParams.get("checkout") || null;
+
   const { lang, messages } = getLocale(request);
   const shop = await getOrCreateShop(shopDomain);
   const planKey = normalizePlanKey(shop.plan);
   const planConfig = PLANS[planKey] || PLANS.free;
+
+  // Effective limits account for active addon
+  const effectiveMaxProducts = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
+  const effectiveMaxTryOns = planConfig.maxTryOnsPerMonth + (shop.addonActive ? ADDON.extraTryOns : 0);
 
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -184,8 +191,10 @@ export const loader = async ({ request }) => {
       : 0;
 
   const statusKey = normalizeStripeStatus(shop.stripeStatus, trialDaysRemaining);
-  const maxTryOns = planConfig.maxTryOnsPerMonth;
-  const usageRatio = maxTryOns > 0 ? tryOnsMonth / maxTryOns : 0;
+  const usageRatio = effectiveMaxTryOns > 0 ? tryOnsMonth / effectiveMaxTryOns : 0;
+
+  // Whether the merchant is on a paid plan (required to purchase addon)
+  const hasPaidPlan = planKey !== "free" && shop.stripeCustomerId !== null;
 
   return json({
     lang,
@@ -196,12 +205,18 @@ export const loader = async ({ request }) => {
     trialDaysRemaining,
     statusKey,
     activeProductsCount,
-    maxProducts: planConfig.maxProducts,
+    maxProducts: effectiveMaxProducts,
     tryOnsMonth,
-    maxTryOns,
-    remainingQuota: Math.max(0, maxTryOns - tryOnsMonth),
+    maxTryOns: effectiveMaxTryOns,
+    remainingQuota: Math.max(0, effectiveMaxTryOns - tryOnsMonth),
     usageRatio,
     activity,
+    addonActive: shop.addonActive,
+    hasPaidPlan,
+    addonPrice: ADDON.priceMonthly,
+    addonExtraProducts: ADDON.extraProducts,
+    addonExtraTryOns: ADDON.extraTryOns,
+    checkoutResult,
     plans: DASHBOARD_PLAN_KEYS.map((key) => ({
       key,
       name: PLANS[key].name,
@@ -217,6 +232,7 @@ export default function DashboardPage() {
   const data = useLoaderData();
   const shopify = useAppBridge();
   const [loadingPlan, setLoadingPlan] = useState(null);
+  const [loadingAddon, setLoadingAddon] = useState(false);
 
   const t = data.messages.dashboard;
 
@@ -226,6 +242,16 @@ export default function DashboardPage() {
 
   const statusTone = getStatusTone(data.statusKey);
   const progressTone = getProgressTone(data.usageRatio);
+
+  // Show a toast for checkout outcomes on mount
+  useMemo(() => {
+    if (data.checkoutResult === "success") {
+      shopify.toast.show(t.checkoutSuccess || "Plan activated!");
+    } else if (data.checkoutResult === "addon_success") {
+      shopify.toast.show(t.addonActivatedToast);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleUpgrade = useCallback(
     async (planKey) => {
@@ -261,6 +287,34 @@ export default function DashboardPage() {
     [data.shopDomain, shopify.toast, t.checkoutError],
   );
 
+  const handleAddonCheckout = useCallback(async () => {
+    setLoadingAddon(true);
+
+    try {
+      const response = await fetch("/api/stripe/addon-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopDomain: data.shopDomain,
+          returnBaseUrl: `${window.location.origin}/app`,
+        }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload?.checkoutUrl) {
+        shopify.toast.show(payload?.error || t.addonCheckoutError);
+        return;
+      }
+
+      window.location.href = payload.checkoutUrl;
+    } catch {
+      shopify.toast.show(t.addonCheckoutError);
+    } finally {
+      setLoadingAddon(false);
+    }
+  }, [data.shopDomain, shopify.toast, t.addonCheckoutError]);
+
   return (
     <Page>
       <TitleBar title={t.title} />
@@ -290,6 +344,7 @@ export default function DashboardPage() {
 
           <Layout.Section>
             <Layout>
+              {/* Card 1 — Plan actuel */}
               <Layout.Section oneHalf>
                 <Card>
                   <BlockStack gap="200">
@@ -306,6 +361,7 @@ export default function DashboardPage() {
                 </Card>
               </Layout.Section>
 
+              {/* Card 2 — Produits actifs (métrique principale) */}
               <Layout.Section oneHalf>
                 <Card>
                   <BlockStack gap="200">
@@ -322,6 +378,7 @@ export default function DashboardPage() {
                 </Card>
               </Layout.Section>
 
+              {/* Card 3 — Try-ons ce mois (fair use) */}
               <Layout.Section oneHalf>
                 <Card>
                   <BlockStack gap="200">
@@ -339,6 +396,7 @@ export default function DashboardPage() {
                 </Card>
               </Layout.Section>
 
+              {/* Card 4 — Quota restant */}
               <Layout.Section oneHalf>
                 <Card>
                   <BlockStack gap="200">
@@ -354,6 +412,7 @@ export default function DashboardPage() {
             </Layout>
           </Layout.Section>
 
+          {/* Activity chart */}
           <Layout.Section>
             <Card>
               <BlockStack gap="300">
@@ -382,6 +441,7 @@ export default function DashboardPage() {
             </Card>
           </Layout.Section>
 
+          {/* Plan selection */}
           <Layout.Section>
             <Card>
               <BlockStack gap="300">
@@ -465,6 +525,46 @@ export default function DashboardPage() {
               </BlockStack>
             </Card>
           </Layout.Section>
+
+          {/* Addon section — only shown on paid plans */}
+          {data.hasPaidPlan ? (
+            <Layout.Section>
+              <Card>
+                <BlockStack gap="300">
+                  <InlineStack align="space-between" blockAlign="center">
+                    <Text as="h2" variant="headingMd">
+                      {t.addonTitle}
+                    </Text>
+                    {data.addonActive ? (
+                      <Badge tone="success">{t.addonActiveBadge}</Badge>
+                    ) : null}
+                  </InlineStack>
+
+                  <Text as="p" variant="bodyMd">
+                    {formatMessage(t.addonDescription, {
+                      products: data.addonExtraProducts,
+                      tryons: data.addonExtraTryOns,
+                      price: data.addonPrice,
+                    })}
+                  </Text>
+
+                  {data.addonActive ? (
+                    <Text as="p" variant="bodySm" tone="subdued">
+                      {t.addonManageHint}
+                    </Text>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      loading={loadingAddon}
+                      onClick={handleAddonCheckout}
+                    >
+                      {t.addonAdd}
+                    </Button>
+                  )}
+                </BlockStack>
+              </Card>
+            </Layout.Section>
+          ) : null}
         </Layout>
       </BlockStack>
     </Page>

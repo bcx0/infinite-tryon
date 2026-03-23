@@ -150,7 +150,3 @@ export async function replicateTryOn({
   return generateTryOn(userImage, productImage);
 }
 
-// Compatibility alias for existing imports.
-export async function nanoBananaTryOn(args) {
-  return replicateTryOn(args);
-}

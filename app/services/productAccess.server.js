@@ -8,8 +8,10 @@ import {
   getShopPlan,
   isProductActive,
   listActiveProductIds,
+  normalizePlanKey,
   setShopPlan as setShopPlanInDb,
 } from "./shopService.server";
+import { ADDON } from "../config/plans";
 
 export async function setShopPlan(shopDomain, planName) {
   const normalizedPlan = String(planName || "free").trim().toLowerCase();
@@ -25,15 +27,17 @@ export async function setShopPlan(shopDomain, planName) {
 
 export async function getPlanStatus(shopDomain) {
   const shop = await getOrCreateShop(shopDomain);
-  const planName = await getShopPlan(shop.shopDomain);
+  const planName = normalizePlanKey(shop.plan);
   const planConfig = getPlanConfig(planName);
   const activeProductsCount = await getActiveProductCount(shop.shopDomain);
+  const effectiveMaxProducts = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
 
   return {
     shopId: shop.shopDomain,
     planName,
-    maxProductsAllowed: planConfig.maxProducts,
+    maxProductsAllowed: effectiveMaxProducts,
     activeProductsCount,
+    addonActive: shop.addonActive,
   };
 }
 

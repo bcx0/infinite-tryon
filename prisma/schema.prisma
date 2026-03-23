@@ -41,6 +41,8 @@ model Shop {
   stripeSubscriptionId String?
   stripeStatus         String?
   currentPeriodEnd     DateTime?
+  addonActive          Boolean    @default(false)
+  addonSubscriptionId  String?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   products             Product[]

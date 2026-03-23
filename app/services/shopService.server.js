@@ -1,4 +1,4 @@
-import { PLANS } from "../config/plans";
+import { PLANS, ADDON } from "../config/plans";
 import db from "../db.server";
 
 function assertShopDomain(shopDomain) {
@@ -147,22 +147,26 @@ export async function listActiveProductIds(shopDomain) {
 
 export async function canActivateProduct(shopDomain) {
   const normalizedShopDomain = assertShopDomain(shopDomain);
-  const planKey = await getShopPlan(normalizedShopDomain);
+  const shop = await getOrCreateShop(normalizedShopDomain);
+  const planKey = normalizePlanKey(shop.plan);
   const planConfig = getPlanConfig(planKey);
   const activeProductsCount = await getActiveProductCount(normalizedShopDomain);
+  const effectiveMaxProducts = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
 
   return {
-    allowed: activeProductsCount < planConfig.maxProducts,
+    allowed: activeProductsCount < effectiveMaxProducts,
     planKey,
-    maxProducts: planConfig.maxProducts,
+    maxProducts: effectiveMaxProducts,
     activeProductsCount,
   };
 }
 
 export async function canGenerateTryOn(shopDomain) {
   const normalizedShopDomain = assertShopDomain(shopDomain);
-  const planKey = await getShopPlan(normalizedShopDomain);
+  const shop = await getOrCreateShop(normalizedShopDomain);
+  const planKey = normalizePlanKey(shop.plan);
   const planConfig = getPlanConfig(planKey);
+  const effectiveMaxTryOns = planConfig.maxTryOnsPerMonth + (shop.addonActive ? ADDON.extraTryOns : 0);
 
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -179,9 +183,9 @@ export async function canGenerateTryOn(shopDomain) {
   });
 
   return {
-    allowed: currentTryOnsCount < planConfig.maxTryOnsPerMonth,
+    allowed: currentTryOnsCount < effectiveMaxTryOns,
     planKey,
-    maxTryOnsPerMonth: planConfig.maxTryOnsPerMonth,
+    maxTryOnsPerMonth: effectiveMaxTryOns,
     currentTryOnsCount,
   };
 }

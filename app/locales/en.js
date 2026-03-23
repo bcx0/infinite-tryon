@@ -31,6 +31,7 @@ export const en = {
     planValueProp: "Save the cost of a monthly photo shoot",
     currentPlanBadge: "Current plan",
     checkoutError: "Unable to create checkout session",
+    checkoutSuccess: "Plan activated successfully!",
     chart: {
       xAxis: "Date",
       yAxis: "Try-ons"
@@ -41,6 +42,13 @@ export const en = {
       premium: "Premium",
       pro: "Pro",
       ultimate: "Ultimate"
-    }
+    },
+    addonTitle: "Extra products add-on",
+    addonDescription: "+{products} products · +{tryons} try-ons/month · {price} EUR/month",
+    addonActiveBadge: "Active",
+    addonAdd: "Add the add-on",
+    addonCheckoutError: "Unable to activate the add-on",
+    addonActivatedToast: "Add-on activated successfully!",
+    addonManageHint: "To cancel the add-on, use the billing portal."
   }
 };
