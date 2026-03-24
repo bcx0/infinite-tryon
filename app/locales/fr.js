@@ -43,6 +43,10 @@ export const fr = {
       pro: "Pro",
       ultimate: "Ultimate"
     },
+    trialCtaTitle: "Commencez votre essai gratuit de 3 jours",
+    trialCtaBody: "Carte bancaire requise — vous ne serez pas preleve avant la fin de l'essai. Annulable a tout moment.",
+    trialCtaButton: "Commencer l'essai gratuit",
+    noActivePlan: "Aucun plan actif — choisissez un plan ci-dessous pour commencer.",
     addonTitle: "Add-on produits supplementaires",
     addonDescription: "+{products} produits · +{tryons} essayages/mois · {price} EUR/mois",
     addonActiveBadge: "Actif",

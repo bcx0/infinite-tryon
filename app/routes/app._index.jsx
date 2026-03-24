@@ -322,6 +322,22 @@ export default function DashboardPage() {
         <Layout>
           <Layout.Section>
             <BlockStack gap="300">
+              {data.planKey === "free" ? (
+                <Banner
+                  tone="info"
+                  title={t.trialCtaTitle}
+                  action={{
+                    content: t.trialCtaButton,
+                    loading: loadingPlan === "starter",
+                    onAction: () => handleUpgrade("starter"),
+                  }}
+                >
+                  <Text as="p" variant="bodyMd">
+                    {t.trialCtaBody}
+                  </Text>
+                </Banner>
+              ) : null}
+
               {data.trialDaysRemaining > 0 ? (
                 <Banner tone="info" title={t.alertTrial}>
                   <Text as="p" variant="bodyMd">
@@ -361,54 +377,67 @@ export default function DashboardPage() {
                 </Card>
               </Layout.Section>
 
-              {/* Card 2 — Produits actifs (métrique principale) */}
-              <Layout.Section oneHalf>
-                <Card>
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingSm">
-                      {t.activeProducts}
-                    </Text>
-                    <Text as="p" variant="bodyLg">
-                      {formatMessage(t.productsLabel, {
-                        used: data.activeProductsCount,
-                        total: data.maxProducts,
-                      })}
-                    </Text>
-                  </BlockStack>
-                </Card>
-              </Layout.Section>
+              {/* Cards 2–4 — Only shown when on a paid plan */}
+              {data.planKey !== "free" ? (
+                <>
+                  {/* Card 2 — Produits actifs (métrique principale) */}
+                  <Layout.Section oneHalf>
+                    <Card>
+                      <BlockStack gap="200">
+                        <Text as="h2" variant="headingSm">
+                          {t.activeProducts}
+                        </Text>
+                        <Text as="p" variant="bodyLg">
+                          {formatMessage(t.productsLabel, {
+                            used: data.activeProductsCount,
+                            total: data.maxProducts,
+                          })}
+                        </Text>
+                      </BlockStack>
+                    </Card>
+                  </Layout.Section>
 
-              {/* Card 3 — Try-ons ce mois (fair use) */}
-              <Layout.Section oneHalf>
-                <Card>
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingSm">
-                      {t.tryonsMonth}
-                    </Text>
-                    <Text as="p" variant="bodyLg">
-                      {formatMessage(t.currentPlanLabel, {
-                        used: data.tryOnsMonth,
-                        total: data.maxTryOns,
-                      })}
-                    </Text>
-                    <ProgressBar progress={usagePercent} tone={progressTone} size="small" />
-                  </BlockStack>
-                </Card>
-              </Layout.Section>
+                  {/* Card 3 — Try-ons ce mois (fair use) */}
+                  <Layout.Section oneHalf>
+                    <Card>
+                      <BlockStack gap="200">
+                        <Text as="h2" variant="headingSm">
+                          {t.tryonsMonth}
+                        </Text>
+                        <Text as="p" variant="bodyLg">
+                          {formatMessage(t.currentPlanLabel, {
+                            used: data.tryOnsMonth,
+                            total: data.maxTryOns,
+                          })}
+                        </Text>
+                        <ProgressBar progress={usagePercent} tone={progressTone} size="small" />
+                      </BlockStack>
+                    </Card>
+                  </Layout.Section>
 
-              {/* Card 4 — Quota restant */}
-              <Layout.Section oneHalf>
-                <Card>
-                  <BlockStack gap="200">
-                    <Text as="h2" variant="headingSm">
-                      {t.remainingQuota}
+                  {/* Card 4 — Quota restant */}
+                  <Layout.Section oneHalf>
+                    <Card>
+                      <BlockStack gap="200">
+                        <Text as="h2" variant="headingSm">
+                          {t.remainingQuota}
+                        </Text>
+                        <Text as="p" variant="bodyLg">
+                          {formatMessage(t.remainingLabel, { count: data.remainingQuota })}
+                        </Text>
+                      </BlockStack>
+                    </Card>
+                  </Layout.Section>
+                </>
+              ) : (
+                <Layout.Section oneHalf>
+                  <Card>
+                    <Text as="p" variant="bodyMd" tone="subdued">
+                      {t.noActivePlan}
                     </Text>
-                    <Text as="p" variant="bodyLg">
-                      {formatMessage(t.remainingLabel, { count: data.remainingQuota })}
-                    </Text>
-                  </BlockStack>
-                </Card>
-              </Layout.Section>
+                  </Card>
+                </Layout.Section>
+              )}
             </Layout>
           </Layout.Section>
 

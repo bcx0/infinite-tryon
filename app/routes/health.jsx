@@ -1,5 +1,6 @@
 import { json } from "@remix-run/node";
 import db from "../db.server";
+import logger from "../utils/logger.server";
 
 // Lightweight healthcheck used by Railway to determine instance readiness.
 // Tests the database connection — if this fails, the instance is unhealthy.
@@ -24,7 +25,7 @@ export const loader = async () => {
       },
     );
   } catch (error) {
-    console.error("[health] db check failed", error?.message);
+    logger.error("health db check failed", { error: error?.message });
 
     return json(
       {
