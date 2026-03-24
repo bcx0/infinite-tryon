@@ -2,6 +2,28 @@ import { json } from "@remix-run/node";
 import { isProductAllowed } from "../services/productAccess.server";
 import db from "../db.server";
 
+// In-memory rate limiter: 20 requests per minute per shop.
+const checkProductRateLimit = new Map();
+const CHECK_PRODUCT_MAX = 20;
+const CHECK_PRODUCT_WINDOW_MS = 60_000;
+
+function isRateLimited(shopId) {
+  const now = Date.now();
+  const entry = checkProductRateLimit.get(shopId);
+
+  if (!entry || now - entry.windowStart > CHECK_PRODUCT_WINDOW_MS) {
+    checkProductRateLimit.set(shopId, { windowStart: now, count: 1 });
+    return false;
+  }
+
+  if (entry.count >= CHECK_PRODUCT_MAX) {
+    return true;
+  }
+
+  entry.count += 1;
+  return false;
+}
+
 async function hasValidSessionForShop(shopDomain) {
   const session = await db.session.findFirst({
     where: {
@@ -36,12 +58,18 @@ export const action = async ({ request }) => {
     );
   }
 
-  const validSession = await hasValidSessionForShop(String(shopId).trim().toLowerCase());
+  const normalizedShopId = String(shopId).trim().toLowerCase();
+
+  if (isRateLimited(normalizedShopId)) {
+    return json({ error: "Too many requests" }, { status: 429 });
+  }
+
+  const validSession = await hasValidSessionForShop(normalizedShopId);
   if (!validSession) {
     return json({ error: "Unauthorized: no active session for this shop" }, { status: 401 });
   }
 
-  const result = await isProductAllowed(String(shopId), String(productId));
+  const result = await isProductAllowed(normalizedShopId, String(productId));
 
   return json({
     allowed: result.allowed,

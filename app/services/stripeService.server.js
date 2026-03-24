@@ -6,6 +6,7 @@ import {
   normalizePlanKey,
   setShopPlan,
 } from "./shopService.server";
+import logger from "../utils/logger.server";
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -72,7 +73,7 @@ async function enforceProductLimit(shopDomain, maxProducts) {
     data: { isActive: false },
   });
 
-  console.info("[stripe] downgrade: deactivated excess products", {
+  logger.info("stripe downgrade: deactivated excess products", {
     shopDomain,
     deactivated: toDeactivate.length,
     maxProductsAllowed: maxProducts,
@@ -114,22 +115,38 @@ export async function createCheckoutSession(shopDomain, planKey, returnBaseUrl) 
     throw new Error("returnBaseUrl is required");
   }
 
+  // Anti-abuse: only grant 3-day trial if this shop has never had a trial before.
+  const shopRecord = await db.shop.findUnique({
+    where: { shopDomain: shop.shopDomain },
+    select: { trialEndsAt: true },
+  });
+  const hasUsedTrial = shopRecord?.trialEndsAt !== null;
+  const trialDays = hasUsedTrial ? 0 : 3;
+
+  const subscriptionData = {
+    metadata: {
+      shopDomain: shop.shopDomain,
+      planKey: normalizedPlan,
+    },
+  };
+  if (trialDays > 0) {
+    subscriptionData.trial_period_days = trialDays;
+    subscriptionData.trial_settings = {
+      end_behavior: { missing_payment_method: "cancel" },
+    };
+  }
+
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer: customer.id,
+    payment_method_collection: "always",
     line_items: [
       {
         price: planConfig.stripePriceId,
         quantity: 1,
       },
     ],
-    subscription_data: {
-      trial_period_days: 14,
-      metadata: {
-        shopDomain: shop.shopDomain,
-        planKey: normalizedPlan,
-      },
-    },
+    subscription_data: subscriptionData,
     metadata: {
       shopDomain: shop.shopDomain,
       planKey: normalizedPlan,
@@ -236,12 +253,13 @@ export async function handleWebhookEvent(rawBody, signature) {
           },
         });
 
-        console.info("[stripe] addon activated", { shopDomain, subscriptionId });
+        logger.info("stripe addon activated", { shopDomain, subscriptionId });
       } else {
         // Main plan subscription
         const planKey = normalizePlanKey(session.metadata?.planKey);
         const subscription = await stripe.subscriptions.retrieve(subscriptionId);
         const periodEnd = dateFromStripeTimestamp(subscription.current_period_end);
+        const trialEndsAt = dateFromStripeTimestamp(subscription.trial_end);
 
         await db.shop.update({
           where: { shopDomain: shopDomain.toLowerCase() },
@@ -250,6 +268,9 @@ export async function handleWebhookEvent(rawBody, signature) {
             stripeSubscriptionId: subscription.id,
             stripeStatus: subscription.status,
             currentPeriodEnd: periodEnd,
+            // Record when the trial ends (or ended). Once set, future checkouts
+            // will skip the trial to prevent abuse.
+            ...(trialEndsAt !== null ? { trialEndsAt } : {}),
           },
         });
 
@@ -352,7 +373,7 @@ export async function handleWebhookEvent(rawBody, signature) {
         });
 
         await enforceProductLimit(shop.shopDomain, planConfig.maxProducts);
-        console.info("[stripe] addon canceled", { shopDomain: shop.shopDomain });
+        logger.info("stripe addon canceled", { shopDomain: shop.shopDomain });
       } else {
         // Main plan canceled: downgrade to free
         await db.shop.update({

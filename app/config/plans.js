@@ -1,12 +1,12 @@
-// free is kept as an internal fallback plan (not shown on the pricing page).
-// It is assigned automatically when a subscription is canceled.
+// free is an internal tombstone — assigned on subscription cancelation.
+// Not shown on the pricing page. Grants zero usable features.
 export const PLANS = {
   free: {
     name: "Free",
     priceMonthly: 0,
     stripePriceId: null,
-    maxProducts: 1,
-    maxTryOnsPerMonth: 10,
+    maxProducts: 0,
+    maxTryOnsPerMonth: 0,
     highlighted: false,
   },
   starter: {

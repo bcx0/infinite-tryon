@@ -43,6 +43,10 @@ export const en = {
       pro: "Pro",
       ultimate: "Ultimate"
     },
+    trialCtaTitle: "Start your 3-day free trial",
+    trialCtaBody: "Card required — you won't be charged until the trial ends. Cancel anytime.",
+    trialCtaButton: "Start free trial",
+    noActivePlan: "No active plan — choose a plan below to get started.",
     addonTitle: "Extra products add-on",
     addonDescription: "+{products} products · +{tryons} try-ons/month · {price} EUR/month",
     addonActiveBadge: "Active",
