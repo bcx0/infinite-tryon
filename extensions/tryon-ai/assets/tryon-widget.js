@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const productId = widget?.dataset.productId;
   const personImageUrl = widget?.dataset.personImageUrl || "";
   const apiBase =
-    (window.TRYON_API_BASE || widget?.dataset.backendUrl || "").replace(
+    (window.TRYON_API_BASE || widget?.dataset.backendUrl || "https://infinite-tryon-production.up.railway.app").replace(
       /\/$/,
       "",
     );
