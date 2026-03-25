@@ -30,13 +30,35 @@ export function getPlanConfig(planKey) {
   return PLANS[normalizePlanKey(planKey)];
 }
 
+/**
+ * Returns the effective plan key for a shop, considering trial status.
+ * If the shop is on the "free" plan but has an active trial, returns "starter".
+ */
+export function getEffectivePlanKey(shop) {
+  const planKey = normalizePlanKey(shop.plan);
+  if (
+    planKey === "free" &&
+    shop.trialEndsAt &&
+    new Date(shop.trialEndsAt) > new Date()
+  ) {
+    return "starter";
+  }
+  return planKey;
+}
+
 export async function getOrCreateShop(shopDomain) {
   const normalizedShopDomain = assertShopDomain(shopDomain);
+
+  const trialEnd = new Date();
+  trialEnd.setDate(trialEnd.getDate() + 7);
 
   return db.shop.upsert({
     where: { shopDomain: normalizedShopDomain },
     update: {},
-    create: { shopDomain: normalizedShopDomain },
+    create: {
+      shopDomain: normalizedShopDomain,
+      trialEndsAt: trialEnd,
+    },
   });
 }
 
@@ -148,7 +170,7 @@ export async function listActiveProductIds(shopDomain) {
 export async function canActivateProduct(shopDomain) {
   const normalizedShopDomain = assertShopDomain(shopDomain);
   const shop = await getOrCreateShop(normalizedShopDomain);
-  const planKey = normalizePlanKey(shop.plan);
+  const planKey = getEffectivePlanKey(shop);
   const planConfig = getPlanConfig(planKey);
   const activeProductsCount = await getActiveProductCount(normalizedShopDomain);
   const effectiveMaxProducts = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
@@ -164,7 +186,7 @@ export async function canActivateProduct(shopDomain) {
 export async function canGenerateTryOn(shopDomain) {
   const normalizedShopDomain = assertShopDomain(shopDomain);
   const shop = await getOrCreateShop(normalizedShopDomain);
-  const planKey = normalizePlanKey(shop.plan);
+  const planKey = getEffectivePlanKey(shop);
   const planConfig = getPlanConfig(planKey);
   const effectiveMaxTryOns = planConfig.maxTryOnsPerMonth + (shop.addonActive ? ADDON.extraTryOns : 0);
 
