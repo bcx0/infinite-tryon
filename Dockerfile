@@ -15,6 +15,6 @@ RUN npm run build
 RUN npx prisma generate
 RUN chmod +x ./start.sh
 
-EXPOSE 3000
+EXPOSE 8080
 
 CMD ["./start.sh"]
