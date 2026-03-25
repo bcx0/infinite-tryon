@@ -3,6 +3,7 @@ import {
   canActivateProduct,
   deactivateProduct,
   getActiveProductCount,
+  getEffectivePlanKey,
   getPlanConfig,
   getOrCreateShop,
   getShopPlan,
@@ -27,25 +28,31 @@ export async function setShopPlan(shopDomain, planName) {
 
 export async function getPlanStatus(shopDomain) {
   const shop = await getOrCreateShop(shopDomain);
-  const planName = normalizePlanKey(shop.plan);
-  const planConfig = getPlanConfig(planName);
+  const effectivePlan = getEffectivePlanKey(shop);
+  const planConfig = getPlanConfig(effectivePlan);
   const activeProductsCount = await getActiveProductCount(shop.shopDomain);
   const effectiveMaxProducts = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
+  const isTrial =
+    normalizePlanKey(shop.plan) === "free" &&
+    shop.trialEndsAt &&
+    new Date(shop.trialEndsAt) > new Date();
 
   return {
     shopId: shop.shopDomain,
-    planName,
+    planName: effectivePlan,
     maxProductsAllowed: effectiveMaxProducts,
     activeProductsCount,
     addonActive: shop.addonActive,
+    isTrial,
+    trialEndsAt: shop.trialEndsAt,
   };
 }
 
 export async function isProductAllowed(shopDomain, productId) {
   const shop = await getOrCreateShop(shopDomain);
-  const planName = await getShopPlan(shop.shopDomain);
+  const planName = getEffectivePlanKey(shop);
   const planConfig = getPlanConfig(planName);
-  const maxProductsAllowed = planConfig.maxProducts;
+  const maxProductsAllowed = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
 
   const alreadyActive = await isProductActive(shop.shopDomain, productId);
   if (alreadyActive) {
