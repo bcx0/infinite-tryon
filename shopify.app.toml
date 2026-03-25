@@ -1,52 +1,65 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
+
 client_id = "a4b5548ad3c0d9d23ccfbf787f0892b5"
 name = "tryon-ai"
 handle = "tryon-ai-1"
-application_url = "https://infinite-tryon-production-b5cf.up.railway.app"
+application_url = "https://infinite-tryon-production.up.railway.app"
 embedded = true
+
 
 [build]
 include_config_on_deploy = true
 automatically_update_urls_on_dev = true
 
+
 [webhooks]
 api_version = "2025-07"
+
 
   [[webhooks.subscriptions]]
   topics = [ "app/uninstalled" ]
   uri = "/webhooks/app/uninstalled"
 
+
   [[webhooks.subscriptions]]
   topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
+
 
   # GDPR mandatory webhooks for App Store submission
   [[webhooks.subscriptions]]
   topics = [ "customers/redact" ]
   uri = "/webhooks/customers/redact"
 
+
   [[webhooks.subscriptions]]
   topics = [ "customers/data_request" ]
   uri = "/webhooks/customers/data_request"
+
 
   [[webhooks.subscriptions]]
   topics = [ "shop/redact" ]
   uri = "/webhooks/shop/redact"
 
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "write_products"
 
+
 [auth]
 redirect_urls = [
-  "https://infinite-tryon-production-b5cf.up.railway.app/auth/callback",
-  "https://infinite-tryon-production-b5cf.up.railway.app/auth/shopify/callback",
-  "https://infinite-tryon-production-b5cf.up.railway.app/api/auth/callback"
+  "https://infinite-tryon-production.up.railway.app/auth/callback",
+  "https://infinite-tryon-production.up.railway.app/auth/shopify/callback",
+  "https://infinite-tryon-production.up.railway.app/api/auth/callback"
 ]
+
 
 [pos]
 embedded = false
 
+
 [app_store]
-  privacy_policy_url = "https://infinite-tryon-production-b5cf.up.railway.app/privacy"
+  privacy_policy_url = "https://infinite-tryon-production.up.railway.app/privacy"
+
