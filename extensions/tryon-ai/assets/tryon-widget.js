@@ -23,7 +23,10 @@ document.addEventListener("DOMContentLoaded", function () {
     e.preventDefault();
 
     const userPhoto = document.getElementById("userPhoto")?.files?.[0] || null;
-    const garmentImageUrl = document.getElementById("productPhoto")?.value || "";
+    let garmentImageUrl = document.getElementById("productPhoto")?.value || "";
+    if (garmentImageUrl.startsWith("//")) {
+      garmentImageUrl = "https:" + garmentImageUrl;
+    }
 
     if (!shopId || !productId) {
       resultDiv.innerHTML =
@@ -51,7 +54,7 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    resultDiv.innerHTML = "Generation en cours...";
+    resultDiv.innerHTML = '<div class="loader"></div><p style="margin-top:10px;">Generation en cours... cela peut prendre jusqu\'a 1 minute.</p>';
     form.querySelector("button[type='submit']")?.setAttribute("disabled", "true");
 
     try {
@@ -85,8 +88,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
       resultDiv.innerHTML = `<img src="${payload.imageUrl}" style="max-width:100%;" alt="Resultat IA">`;
     } catch (error) {
-      console.error(error);
-      resultDiv.innerHTML = "Erreur inattendue.";
+      console.error("[TryOn Widget] Error:", error);
+      resultDiv.innerHTML = "Erreur de connexion au serveur. Veuillez reessayer.";
     } finally {
       form.querySelector("button[type='submit']")?.removeAttribute("disabled");
     }
