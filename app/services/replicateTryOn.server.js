@@ -16,19 +16,22 @@ function getFalClient() {
   fal.config({ credentials: key });
 }
 
-async function uploadBase64ToFal(base64DataUri) {
-  if (base64DataUri.startsWith("http://") || base64DataUri.startsWith("https://")) {
-    return base64DataUri;
+/**
+ * Prepare a person image for FASHN.
+ * fal.ai models accept both URLs and base64 data URIs directly,
+ * so we simply pass through whatever we receive.
+ */
+function prepareImageInput(imageData) {
+  if (!imageData || typeof imageData !== "string") {
+    throw new Error("Invalid image data");
   }
-  const matches = base64DataUri.match(/^data:(.+?);base64,(.+)$/);
-  if (!matches) {
-    throw new Error("Invalid base64 data URI format");
+  if (imageData.startsWith("http://") || imageData.startsWith("https://")) {
+    return imageData;
   }
-  const mimeType = matches[1];
-  const base64Data = matches[2];
-  const buffer = Buffer.from(base64Data, "base64");
-  const url = await fal.storage.upload(new Blob([buffer], { type: mimeType }));
-  return url;
+  if (imageData.startsWith("data:")) {
+    return imageData;
+  }
+  throw new Error("Unsupported image format: expected URL or base64 data URI");
 }
 
 export async function generateTryOn(personImage, garmentImageUrl) {
@@ -37,14 +40,24 @@ export async function generateTryOn(personImage, garmentImageUrl) {
   }
 
   if (isMockEnabled()) {
-    return { success: true, imageUrl: DEFAULT_MOCK_IMAGE_URL, mock: true };
+    return {
+      success: true,
+      imageUrl: DEFAULT_MOCK_IMAGE_URL,
+      mock: true,
+    };
   }
 
   try {
     getFalClient();
-    console.info("[tryon] Uploading person image to fal.ai storage...");
-    const personImageUrl = await uploadBase64ToFal(personImage);
-    console.info("[tryon] Calling FASHN v1.6 via fal.ai...");
+
+    console.info("[tryon] Preparing person image...");
+    const personImageUrl = prepareImageInput(personImage);
+    console.info("[tryon] Person image ready (type: %s)", personImageUrl.startsWith("data:") ? "base64" : "url");
+
+    console.info("[tryon] Calling FASHN v1.6 via fal.ai...", {
+      model: FASHN_MODEL_ID,
+      garmentUrl: garmentImageUrl.substring(0, 80),
+    });
 
     const result = await fal.subscribe(FASHN_MODEL_ID, {
       input: {
@@ -71,15 +84,16 @@ export async function generateTryOn(personImage, garmentImageUrl) {
       (typeof result?.data === "string" ? result.data : null);
 
     if (!imageUrl) {
-      console.error("[tryon] Unexpected FASHN response:", JSON.stringify(result?.data)?.substring(0, 500));
+      console.error("[tryon] Unexpected FASHN response structure:", JSON.stringify(result?.data)?.substring(0, 500));
       return { success: false, error: "FASHN response missing output image URL" };
     }
 
-    console.info("[tryon] FASHN generation succeeded");
+    console.info("[tryon] FASHN generation succeeded:", imageUrl.substring(0, 80) + "...");
     return { success: true, imageUrl };
   } catch (error) {
     const msg = error?.message || String(error);
     console.error("[tryon] FASHN error:", msg);
+
     if (msg.includes("402") || msg.includes("Payment") || msg.includes("Insufficient") || msg.includes("balance")) {
       return { success: false, error: "REPLICATE_BILLING_ERROR", raw: msg };
     }
@@ -93,6 +107,11 @@ export async function generateTryOn(personImage, garmentImageUrl) {
   }
 }
 
-export async function replicateTryOn({ userImage, productImage, garmentType: _garmentType, options: _options = {} }) {
+export async function replicateTryOn({
+  userImage,
+  productImage,
+  garmentType: _garmentType,
+  options: _options = {},
+}) {
   return generateTryOn(userImage, productImage);
 }
