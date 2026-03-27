@@ -1,8 +1,6 @@
-import Replicate from "replicate";
+import { fal } from "@fal-ai/client";
 
-const MODEL_SLUG = "cuuupid/idm-vton";
-const TIMEOUT_MS = 120000;
-const POLL_INTERVAL_MS = 2500;
+const FASHN_MODEL_ID = "fal-ai/fashn/tryon/v1.6";
 const DEFAULT_MOCK_IMAGE_URL =
   "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=800";
 
@@ -10,143 +8,91 @@ function isMockEnabled() {
   return String(process.env.USE_MOCK || "").toLowerCase() === "true";
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function getFalClient() {
+  const key = process.env.FAL_KEY;
+  if (!key) {
+    throw new Error("fal.ai is not configured: missing FAL_KEY environment variable");
+  }
+  fal.config({ credentials: key });
 }
 
-function getReplicateClient() {
-  const token = process.env.REPLICATE_API_TOKEN;
-  if (!token) {
-    throw new Error("Replicate is not configured: missing REPLICATE_API_TOKEN");
+async function uploadBase64ToFal(base64DataUri) {
+  if (base64DataUri.startsWith("http://") || base64DataUri.startsWith("https://")) {
+    return base64DataUri;
   }
-
-  return new Replicate({ auth: token });
+  const matches = base64DataUri.match(/^data:(.+?);base64,(.+)$/);
+  if (!matches) {
+    throw new Error("Invalid base64 data URI format");
+  }
+  const mimeType = matches[1];
+  const base64Data = matches[2];
+  const buffer = Buffer.from(base64Data, "base64");
+  const url = await fal.storage.upload(new Blob([buffer], { type: mimeType }));
+  return url;
 }
 
-async function getModelVersionId(replicate) {
-  const pinned = process.env.REPLICATE_MODEL_VERSION;
-  if (pinned) {
-    return pinned;
-  }
-
-  let model = null;
-
-  try {
-    model = await replicate.models.get(MODEL_SLUG);
-  } catch {
-    const [owner, name] = MODEL_SLUG.split("/");
-    model = await replicate.models.get(owner, name);
-  }
-
-  const versionId = model?.latest_version?.id;
-  if (!versionId) {
-    throw new Error(`Unable to resolve latest model version for ${MODEL_SLUG}`);
-  }
-
-  return versionId;
-}
-
-function extractImageUrl(output) {
-  if (typeof output === "string") {
-    return output;
-  }
-
-  if (Array.isArray(output)) {
-    const firstString = output.find((entry) => typeof entry === "string");
-    if (firstString) {
-      return firstString;
-    }
-
-    const firstUrlObject = output.find(
-      (entry) => entry && typeof entry === "object" && typeof entry.url === "string",
-    );
-    if (firstUrlObject?.url) {
-      return firstUrlObject.url;
-    }
-  }
-
-  if (output && typeof output === "object") {
-    if (typeof output.url === "string") {
-      return output.url;
-    }
-    if (typeof output.image === "string") {
-      return output.image;
-    }
-  }
-
-  return null;
-}
-
-export async function generateTryOn(personImageUrl, garmentImageUrl) {
-  if (!personImageUrl || !garmentImageUrl) {
-    return { success: false, error: "Missing personImageUrl or garmentImageUrl" };
+export async function generateTryOn(personImage, garmentImageUrl) {
+  if (!personImage || !garmentImageUrl) {
+    return { success: false, error: "Missing personImage or garmentImageUrl" };
   }
 
   if (isMockEnabled()) {
-    return {
-      success: true,
-      imageUrl: DEFAULT_MOCK_IMAGE_URL,
-      mock: true,
-    };
+    return { success: true, imageUrl: DEFAULT_MOCK_IMAGE_URL, mock: true };
   }
 
   try {
-    const replicate = getReplicateClient();
-    const version = await getModelVersionId(replicate);
+    getFalClient();
+    console.info("[tryon] Uploading person image to fal.ai storage...");
+    const personImageUrl = await uploadBase64ToFal(personImage);
+    console.info("[tryon] Calling FASHN v1.6 via fal.ai...");
 
-    const prediction = await replicate.predictions.create({
-      version,
+    const result = await fal.subscribe(FASHN_MODEL_ID, {
       input: {
-        human_img: personImageUrl,
-        garm_img: garmentImageUrl,
-        garment_des: "garment",
-        is_checked: true,
-        is_checked_crop: false,
-        denoise_steps: 20,
-        seed: 42,
+        model_image: personImageUrl,
+        garment_image: garmentImageUrl,
+        category: "auto",
+      },
+      logs: true,
+      onQueueUpdate: (update) => {
+        if (update.status === "IN_PROGRESS") {
+          const messages = update.logs?.map((log) => log.message) || [];
+          if (messages.length > 0) {
+            console.info("[tryon] FASHN progress:", messages.join(", "));
+          }
+        }
       },
     });
 
-    const startedAt = Date.now();
-    let currentPrediction = prediction;
+    const imageUrl =
+      result?.data?.image?.url ||
+      result?.data?.image ||
+      result?.data?.output?.url ||
+      result?.data?.output ||
+      (typeof result?.data === "string" ? result.data : null);
 
-    while (
-      currentPrediction.status !== "succeeded" &&
-      currentPrediction.status !== "failed" &&
-      currentPrediction.status !== "canceled"
-    ) {
-      if (Date.now() - startedAt > TIMEOUT_MS) {
-        return { success: false, error: "Replicate prediction timed out after 120 seconds" };
-      }
-
-      await sleep(POLL_INTERVAL_MS);
-      currentPrediction = await replicate.predictions.get(currentPrediction.id);
-    }
-
-    if (currentPrediction.status !== "succeeded") {
-      return {
-        success: false,
-        error: currentPrediction.error || "Replicate prediction failed",
-      };
-    }
-
-    const imageUrl = extractImageUrl(currentPrediction.output);
     if (!imageUrl) {
-      return { success: false, error: "Replicate response missing output image URL" };
+      console.error("[tryon] Unexpected FASHN response:", JSON.stringify(result?.data)?.substring(0, 500));
+      return { success: false, error: "FASHN response missing output image URL" };
     }
 
+    console.info("[tryon] FASHN generation succeeded");
     return { success: true, imageUrl };
   } catch (error) {
-    return { success: false, error: error?.message || "Unexpected Replicate error" };
+    const msg = error?.message || String(error);
+    console.error("[tryon] FASHN error:", msg);
+    if (msg.includes("402") || msg.includes("Payment") || msg.includes("Insufficient") || msg.includes("balance")) {
+      return { success: false, error: "REPLICATE_BILLING_ERROR", raw: msg };
+    }
+    if (msg.includes("401") || msg.includes("Unauthorized") || msg.includes("Invalid") || msg.includes("credentials")) {
+      return { success: false, error: "REPLICATE_AUTH_ERROR", raw: msg };
+    }
+    if (msg.includes("429") || msg.includes("Too Many") || msg.includes("rate")) {
+      return { success: false, error: "REPLICATE_RATE_LIMITED", raw: msg };
+    }
+    return { success: false, error: msg || "Unexpected FASHN error" };
   }
 }
 
-export async function replicateTryOn({
-  userImage,
-  productImage,
-  garmentType: _garmentType,
-  options: _options = {},
-}) {
+export async function replicateTryOn({ userImage, productImage, garmentType: _garmentType, options: _options = {} }) {
   return generateTryOn(userImage, productImage);
 }
-
