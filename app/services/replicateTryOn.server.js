@@ -45,7 +45,7 @@ export async function generateTryOn(personImage, garmentImageUrl) {
     const personImageUrl = prepareImageInput(personImage);
     console.info("[tryon] Person image ready (type: %s)", personImageUrl.startsWith("data:") ? "base64" : "url");
 
-    console.info("[tryon] Calling FASHN v1.6 via fal.ai...", {
+    console.info("[tryon] Calling FASHN v1.6 via fal.ai (quality mode)...", {
       model: FASHN_MODEL_ID,
       garmentUrl: garmentImageUrl.substring(0, 80),
     });
@@ -55,6 +55,9 @@ export async function generateTryOn(personImage, garmentImageUrl) {
         model_image: personImageUrl,
         garment_image: garmentImageUrl,
         category: "auto",
+        mode: "quality",
+        garment_photo_type: "auto",
+        output_format: "png",
       },
       logs: true,
       onQueueUpdate: (update) => {
@@ -67,11 +70,8 @@ export async function generateTryOn(personImage, garmentImageUrl) {
       },
     });
 
-    // Log full response structure for debugging
     console.info("[tryon] FASHN raw response keys:", Object.keys(result || {}));
 
-    // Extract the output image URL
-    // FASHN v1.6 returns: { images: [{ url: "https://cdn.fashn.ai/..." }] }
     const imageUrl =
       result?.images?.[0]?.url ||
       result?.image?.url ||
