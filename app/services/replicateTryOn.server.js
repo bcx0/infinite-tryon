@@ -58,6 +58,9 @@ export async function generateTryOn(personImage, garmentImageUrl) {
         mode: "quality",
         garment_photo_type: "auto",
         output_format: "png",
+        adjust_hands: false,
+        restore_background: true,
+        restore_clothes: true,
       },
       logs: true,
       onQueueUpdate: (update) => {
