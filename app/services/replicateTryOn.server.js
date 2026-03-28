@@ -71,17 +71,14 @@ export async function generateTryOn(personImage, garmentImageUrl) {
     console.info("[tryon] FASHN raw response keys:", Object.keys(result || {}));
 
     // Extract the output image URL
-    // fal.subscribe() returns data directly (no .data wrapper)
+    // FASHN v1.6 returns: { images: [{ url: "https://cdn.fashn.ai/..." }] }
     const imageUrl =
+      result?.images?.[0]?.url ||
       result?.image?.url ||
-      result?.image ||
-      result?.output?.url ||
-      result?.output ||
+      result?.data?.images?.[0]?.url ||
       result?.data?.image?.url ||
-      result?.data?.image ||
+      result?.output?.url ||
       result?.data?.output?.url ||
-      result?.data?.output ||
-      (typeof result?.data === "string" ? result.data : null) ||
       (typeof result === "string" ? result : null);
 
     if (!imageUrl) {
@@ -89,8 +86,8 @@ export async function generateTryOn(personImage, garmentImageUrl) {
       return { success: false, error: "FASHN response missing output image URL" };
     }
 
-    console.info("[tryon] FASHN generation succeeded:", typeof imageUrl === "string" ? imageUrl.substring(0, 80) + "..." : imageUrl);
-    return { success: true, imageUrl: typeof imageUrl === "string" ? imageUrl : imageUrl.url || imageUrl };
+    console.info("[tryon] FASHN generation succeeded:", imageUrl.substring(0, 80) + "...");
+    return { success: true, imageUrl };
   } catch (error) {
     const msg = error?.message || String(error);
     console.error("[tryon] FASHN error:", msg);
