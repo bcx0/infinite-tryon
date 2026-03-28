@@ -54,7 +54,25 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
 
-    resultDiv.innerHTML = '<div class="loader"></div><p style="margin-top:10px;">Generation en cours... cela peut prendre jusqu\'a 1 minute.</p>';
+    let seconds = 0;
+    const timerEl = '__tryon_timer__';
+    resultDiv.innerHTML =
+      '<div class="loader"></div>' +
+      '<p style="margin-top:12px;font-weight:600;font-size:15px;">Notre IA cr\u00e9e votre essayage virtuel\u2026</p>' +
+      '<p id="' + timerEl + '" style="margin-top:4px;color:#888;font-size:13px;">Temps estim\u00e9 : ~20 secondes</p>';
+    const timer = setInterval(function () {
+      seconds++;
+      const el = document.getElementById(timerEl);
+      if (el) {
+        if (seconds < 15) {
+          el.textContent = 'Analyse du v\u00eatement et de votre photo\u2026 (' + seconds + 's)';
+        } else if (seconds < 25) {
+          el.textContent = 'G\u00e9n\u00e9ration en cours, presque termin\u00e9\u2026 (' + seconds + 's)';
+        } else {
+          el.textContent = 'Finalisation de l\u2019image\u2026 (' + seconds + 's)';
+        }
+      }
+    }, 1000);
     form.querySelector("button[type='submit']")?.setAttribute("disabled", "true");
 
     try {
@@ -86,11 +104,16 @@ document.addEventListener("DOMContentLoaded", function () {
         return;
       }
 
-      resultDiv.innerHTML = `<img src="${payload.imageUrl}" style="max-width:100%;" alt="Resultat IA">`;
+      resultDiv.innerHTML =
+        '<img src="' + payload.imageUrl + '" style="max-width:100%;border-radius:8px;" alt="Aper\u00e7u essayage virtuel">' +
+        '<p style="margin-top:10px;font-size:12px;color:#999;text-align:center;line-height:1.4;">' +
+        '\u2728 Aper\u00e7u g\u00e9n\u00e9r\u00e9 par IA \u2014 le rendu r\u00e9el peut l\u00e9g\u00e8rement varier.' +
+        '</p>';
     } catch (error) {
       console.error("[TryOn Widget] Error:", error);
-      resultDiv.innerHTML = "Erreur de connexion au serveur. Veuillez reessayer.";
+      resultDiv.innerHTML = "Erreur de connexion au serveur. Veuillez r\u00e9essayer.";
     } finally {
+      clearInterval(timer);
       form.querySelector("button[type='submit']")?.removeAttribute("disabled");
     }
   });
