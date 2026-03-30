@@ -126,17 +126,32 @@ export const action = async ({ request }) => {
 
     const tryOnQuota = await canGenerateTryOn(headerShopDomain);
     if (!tryOnQuota.allowed) {
-      return json({ success: false, error: "TRYON_QUOTA_EXCEEDED", reason: "TRYON_QUOTA_EXCEEDED", plan_name: tryOnQuota.planKey, max_tryons_per_month: tryOnQuota.maxTryOnsPerMonth, current_tryons_count: tryOnQuota.currentTryOnsCount }, { status: 403, headers });
+      return json({ success: false, error: "TRYON_QUOTA_EXCEEDED", reason: "TRYON_QUOTA_EXCEEDED", plan_name: tryOnQuota.planKey, max_tryons_per_month: tryOnQuota.maxTryOnsPerMonth, current_tryons_count: tryOnQuota.currentTryOnsCount, boost_enabled: tryOnQuota.boostEnabled }, { status: 403, headers });
+    }
+
+    if (tryOnQuota.isBoost) {
+      console.info("[tryon] BOOST try-on", { shopId: headerShopDomain, currentCount: tryOnQuota.currentTryOnsCount, maxQuota: tryOnQuota.maxTryOnsPerMonth });
     }
 
     const result = await replicateTryOn({ userImage, productImage, garmentType, options: payload?.options || {} });
 
     if (!result.success) {
-      console.error("[tryon] generation failed", { shopId: headerShopDomain, productId, error: result.error });
+      console.error("[tryon] generation failed", { shopId: headerShopDomain, productId, error: result.error, raw: result.raw });
       try {
         await logTryOn(headerShopDomain, typeof productId === "string" ? productId : null, "error", null, result.error || "TRYON_FAILED");
       } catch (logErr) {
         console.error("[tryon] failed to log error", logErr?.message);
+      }
+
+      // Map internal error codes to user-friendly responses (never expose raw API errors)
+      const errorMap = {
+        REPLICATE_BILLING_ERROR: { status: 503, message: "Le service d'essayage est temporairement indisponible. Veuillez réessayer plus tard." },
+        REPLICATE_AUTH_ERROR: { status: 503, message: "Le service d'essayage est temporairement indisponible. Veuillez réessayer plus tard." },
+        REPLICATE_RATE_LIMITED: { status: 429, message: "Trop de requêtes en cours. Veuillez patienter quelques instants." },
+      };
+      const mapped = errorMap[result.error];
+      if (mapped) {
+        return json({ success: false, error: mapped.message }, { status: mapped.status, headers });
       }
       return json({ success: false, error: result.error || "TRYON_FAILED" }, { status: 500, headers });
     }

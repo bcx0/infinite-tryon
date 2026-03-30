@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
           </p>
           <ul>
             <li><strong>Railway</strong> — cloud hosting and infrastructure.</li>
-            <li><strong>Stripe</strong> — payment processing (we never store full card details).</li>
+            <li><strong>Shopify</strong> — payment processing via Shopify Billing API.</li>
             <li>
               <strong>AI model providers</strong> — images may be sent to AI inference APIs solely
               to generate try-on results. These providers are contractually prohibited from using

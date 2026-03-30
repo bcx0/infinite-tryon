@@ -1,4 +1,4 @@
-import { json } from "@remix-run/node";
+import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -26,7 +26,7 @@ import {
 } from "recharts";
 import db from "../db.server";
 import { getLocale } from "../locales";
-import { PLANS, ADDON } from "../config/plans";
+import { PLANS } from "../config/plans";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop, normalizePlanKey } from "../services/shopService.server";
 
@@ -49,25 +49,10 @@ function formatDayLabel(date) {
   return `${day}/${month}`;
 }
 
-function normalizeStripeStatus(stripeStatus, trialDaysRemaining) {
-  const normalized = String(stripeStatus || "").trim().toLowerCase();
-
-  if (normalized === "past_due") {
-    return "pastDue";
-  }
-
-  if (
-    normalized === "canceled" ||
-    normalized === "unpaid" ||
-    normalized === "incomplete_expired"
-  ) {
+function deriveStatusKey(planKey) {
+  if (planKey === "free") {
     return "canceled";
   }
-
-  if (trialDaysRemaining > 0) {
-    return "trial";
-  }
-
   return "active";
 }
 
@@ -119,9 +104,14 @@ export const loader = async ({ request }) => {
   const planKey = normalizePlanKey(shop.plan);
   const planConfig = PLANS[planKey] || PLANS.free;
 
-  // Effective limits account for active addon
-  const effectiveMaxProducts = planConfig.maxProducts + (shop.addonActive ? ADDON.extraProducts : 0);
-  const effectiveMaxTryOns = planConfig.maxTryOnsPerMonth + (shop.addonActive ? ADDON.extraTryOns : 0);
+  // Redirect new merchants (no plan yet) to onboarding guide
+  if (planKey === "free" && !checkoutResult) {
+    return redirect("/app/onboarding");
+  }
+
+  // Effective limits (addon temporarily disabled during Shopify Billing migration)
+  const effectiveMaxProducts = planConfig.maxProducts;
+  const effectiveMaxTryOns = planConfig.maxTryOnsPerMonth;
 
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -184,25 +174,18 @@ export const loader = async ({ request }) => {
     });
   }
 
-  const trialEndsAt = shop.trialEndsAt ? new Date(shop.trialEndsAt) : null;
-  const trialDaysRemaining =
-    trialEndsAt && trialEndsAt.getTime() > now.getTime()
-      ? Math.max(0, Math.ceil((trialEndsAt.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
-      : 0;
-
-  const statusKey = normalizeStripeStatus(shop.stripeStatus, trialDaysRemaining);
+  const statusKey = deriveStatusKey(planKey);
   const usageRatio = effectiveMaxTryOns > 0 ? tryOnsMonth / effectiveMaxTryOns : 0;
 
-  // Whether the merchant is on a paid plan (required to purchase addon)
-  const hasPaidPlan = planKey !== "free" && shop.stripeCustomerId !== null;
+  // Boost stats
+  const boostTryOns = Math.max(0, tryOnsMonth - effectiveMaxTryOns);
+  const boostCost = (boostTryOns * 0.15).toFixed(2);
 
   return json({
     lang,
     messages,
     shopDomain,
     planKey,
-    stripeStatus: shop.stripeStatus || null,
-    trialDaysRemaining,
     statusKey,
     activeProductsCount,
     maxProducts: effectiveMaxProducts,
@@ -211,12 +194,10 @@ export const loader = async ({ request }) => {
     remainingQuota: Math.max(0, effectiveMaxTryOns - tryOnsMonth),
     usageRatio,
     activity,
-    addonActive: shop.addonActive,
-    hasPaidPlan,
-    addonPrice: ADDON.priceMonthly,
-    addonExtraProducts: ADDON.extraProducts,
-    addonExtraTryOns: ADDON.extraTryOns,
     checkoutResult,
+    boostEnabled: shop.boostEnabled || false,
+    boostTryOns,
+    boostCost,
     plans: DASHBOARD_PLAN_KEYS.map((key) => ({
       key,
       name: PLANS[key].name,
@@ -232,7 +213,8 @@ export default function DashboardPage() {
   const data = useLoaderData();
   const shopify = useAppBridge();
   const [loadingPlan, setLoadingPlan] = useState(null);
-  const [loadingAddon, setLoadingAddon] = useState(false);
+  const [boostEnabled, setBoostEnabled] = useState(data.boostEnabled);
+  const [boostLoading, setBoostLoading] = useState(false);
 
   const t = data.messages.dashboard;
 
@@ -254,66 +236,36 @@ export default function DashboardPage() {
   }, []);
 
   const handleUpgrade = useCallback(
-    async (planKey) => {
+    (planKey) => {
       setLoadingPlan(planKey);
-
-      try {
-        const response = await fetch("/api/stripe/checkout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            planKey,
-            shopDomain: data.shopDomain,
-            returnBaseUrl: `${window.location.origin}/app`,
-          }),
-        });
-
-        const payload = await response.json();
-
-        if (!response.ok || !payload?.checkoutUrl) {
-          shopify.toast.show(payload?.error || t.checkoutError);
-          return;
-        }
-
-        window.location.href = payload.checkoutUrl;
-      } catch {
-        shopify.toast.show(t.checkoutError);
-      } finally {
-        setLoadingPlan(null);
-      }
+      // Navigate to the Shopify Billing route (server-side redirect to Shopify payment page)
+      window.open(`/app/billing?plan=${planKey}`, "_top");
     },
-    [data.shopDomain, shopify.toast, t.checkoutError],
+    [],
   );
 
-  const handleAddonCheckout = useCallback(async () => {
-    setLoadingAddon(true);
-
+  const handleBoostToggle = useCallback(async () => {
+    setBoostLoading(true);
     try {
-      const response = await fetch("/api/stripe/addon-checkout", {
+      const response = await fetch("/app/boost-toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shopDomain: data.shopDomain,
-          returnBaseUrl: `${window.location.origin}/app`,
-        }),
       });
-
       const payload = await response.json();
-
-      if (!response.ok || !payload?.checkoutUrl) {
-        shopify.toast.show(payload?.error || t.addonCheckoutError);
-        return;
+      if (response.ok) {
+        setBoostEnabled(payload.boostEnabled);
+        shopify.toast.show(
+          payload.boostEnabled
+            ? (t.boost?.activated || "Mode Boost activé !")
+            : (t.boost?.deactivated || "Mode Boost désactivé"),
+        );
       }
-
-      window.location.href = payload.checkoutUrl;
     } catch {
-      shopify.toast.show(t.addonCheckoutError);
+      shopify.toast.show(t.boost?.error || "Erreur");
     } finally {
-      setLoadingAddon(false);
+      setBoostLoading(false);
     }
-  }, [data.shopDomain, shopify.toast, t.addonCheckoutError]);
+  }, [shopify.toast, t.boost]);
 
   return (
     <Page>
@@ -338,17 +290,8 @@ export default function DashboardPage() {
                 </Banner>
               ) : null}
 
-              {data.trialDaysRemaining > 0 ? (
-                <Banner tone="info" title={t.alertTrial}>
-                  <Text as="p" variant="bodyMd">
-                    {`${data.trialDaysRemaining} ${t.trialDays}`}
-                  </Text>
-                </Banner>
-              ) : null}
 
-              {data.stripeStatus === "past_due" ? (
-                <Banner tone="warning" title={t.alertPayment} />
-              ) : null}
+
 
               {data.usageRatio >= 1 ? (
                 <Banner tone="critical" title={t.quotaExceeded} />
@@ -555,45 +498,55 @@ export default function DashboardPage() {
             </Card>
           </Layout.Section>
 
-          {/* Addon section — only shown on paid plans */}
-          {data.hasPaidPlan ? (
+          {/* Mode Boost — only shown on paid plans */}
+          {data.planKey !== "free" ? (
             <Layout.Section>
               <Card>
                 <BlockStack gap="300">
                   <InlineStack align="space-between" blockAlign="center">
                     <Text as="h2" variant="headingMd">
-                      {t.addonTitle}
+                      {t.boost?.title || "Mode Boost"}
                     </Text>
-                    {data.addonActive ? (
-                      <Badge tone="success">{t.addonActiveBadge}</Badge>
-                    ) : null}
+                    <Badge tone={boostEnabled ? "success" : "new"}>
+                      {boostEnabled
+                        ? (t.boost?.enabled || "Activé")
+                        : (t.boost?.disabled || "Désactivé")}
+                    </Badge>
                   </InlineStack>
 
                   <Text as="p" variant="bodyMd">
-                    {formatMessage(t.addonDescription, {
-                      products: data.addonExtraProducts,
-                      tryons: data.addonExtraTryOns,
-                      price: data.addonPrice,
-                    })}
+                    {t.boost?.description || "Continuez à offrir l'essayage virtuel même après votre quota. Chaque essai supplémentaire est facturé 0.15€ sur votre facture Shopify."}
                   </Text>
 
-                  {data.addonActive ? (
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      {t.addonManageHint}
-                    </Text>
-                  ) : (
-                    <Button
-                      variant="secondary"
-                      loading={loadingAddon}
-                      onClick={handleAddonCheckout}
-                    >
-                      {t.addonAdd}
-                    </Button>
-                  )}
+                  {data.boostTryOns > 0 ? (
+                    <Banner tone="info">
+                      <Text as="p" variant="bodyMd">
+                        {formatMessage(t.boost?.usage || "{count} essais boost ce mois ({cost}€)", {
+                          count: data.boostTryOns,
+                          cost: data.boostCost,
+                        })}
+                      </Text>
+                    </Banner>
+                  ) : null}
+
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {t.boost?.cappedInfo || "Plafonné à 50€/mois maximum."}
+                  </Text>
+
+                  <Button
+                    variant={boostEnabled ? "secondary" : "primary"}
+                    loading={boostLoading}
+                    onClick={handleBoostToggle}
+                  >
+                    {boostEnabled
+                      ? (t.boost?.deactivate || "Désactiver le Mode Boost")
+                      : (t.boost?.activate || "Activer le Mode Boost")}
+                  </Button>
                 </BlockStack>
               </Card>
             </Layout.Section>
           ) : null}
+
         </Layout>
       </BlockStack>
     </Page>

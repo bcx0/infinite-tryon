@@ -43,6 +43,7 @@ model Shop {
   currentPeriodEnd     DateTime?
   addonActive          Boolean    @default(false)
   addonSubscriptionId  String?
+  boostEnabled         Boolean    @default(false)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   products             Product[]

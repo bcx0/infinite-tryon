@@ -53,7 +53,20 @@ export const en = {
     addonAdd: "Add the add-on",
     addonCheckoutError: "Unable to activate the add-on",
     addonActivatedToast: "Add-on activated successfully!",
-    addonManageHint: "To cancel the add-on, use the billing portal."
+    addonManageHint: "To cancel the add-on, use the billing portal.",
+    boost: {
+      title: "Boost Mode",
+      description: "Keep offering virtual try-on even after your monthly quota. Each extra try-on is billed at €0.15 on your Shopify invoice.",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      activate: "Enable Boost Mode",
+      deactivate: "Disable Boost Mode",
+      activated: "Boost Mode enabled!",
+      deactivated: "Boost Mode disabled",
+      usage: "{count} boost try-ons this month (€{cost})",
+      cappedInfo: "Capped at €50/month maximum.",
+      error: "Error toggling boost",
+    },
   },
   products: {
     title: "Products",
@@ -87,5 +100,60 @@ export const en = {
     requiresPlanBody: "You need an active paid plan to activate the add-on.",
     checkoutError: "Unable to activate the add-on",
     portalError: "Unable to open the billing portal"
+  },
+  onboarding: {
+    title: "Setup Guide",
+    welcome: "Welcome to Infinite Tryon!",
+    intro: "Follow these 4 steps to activate virtual try-on on your store. Estimated time: 10 minutes.",
+    helpTitle: "Need help?",
+    helpBody: "Contact us at support@infinitetryon.com — we reply within 24 hours.",
+    plan: {
+      title: "Choose your plan",
+      description: "Select a plan that fits your catalog. You can start with Starter (3 products) and upgrade anytime.",
+      instructions: [
+        "Go to the Home tab of the app",
+        "Choose a plan (Starter, Premium, Pro or Ultimate)",
+        "Complete the payment via Shopify",
+        "Your plan is immediately active"
+      ],
+      important: null
+    },
+    theme: {
+      title: "Activate the widget on your theme",
+      description: "Add the virtual try-on block to your product pages. This is what your customers will see.",
+      instructions: [
+        "Go to Online Store > Themes > Customize",
+        "Open a product page (Product page)",
+        "Click 'Add a block' in the product section",
+        "Search for 'Essayage IA' in the available blocks",
+        "Position the block where you want it (below the Add to Cart button for example)",
+        "Click Save"
+      ],
+      important: "The block only needs to be added once — it will automatically appear on all product pages."
+    },
+    products: {
+      title: "Configure your products",
+      description: "For each product, fill in the product type in Shopify. This is essential for the AI to know what type of garment to try on.",
+      instructions: [
+        "Go to Products in your Shopify admin",
+        "Open each relevant product",
+        "Fill in the 'Product type' field (e.g., T-shirt, Jeans, Dress, Jacket, Pants...)",
+        "Make sure the main product photo shows the garment alone (flat-lay or mannequin)",
+        "Save each product"
+      ],
+      important: "The product type is essential! Without it, the AI won't know if it's a top, bottom or dress, and the result quality will be lower."
+    },
+    test: {
+      title: "Test the try-on",
+      description: "Verify everything works by testing a try-on on your store.",
+      instructions: [
+        "Open your store (or the theme preview mode)",
+        "Go to a product page where the block is active",
+        "Upload a photo (full body, facing camera, arms at sides)",
+        "Click 'Try with AI' and wait ~20 seconds",
+        "Check the result — if it's not good, try with a better photo"
+      ],
+      important: null
+    }
   }
 };

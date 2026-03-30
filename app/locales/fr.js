@@ -53,7 +53,20 @@ export const fr = {
     addonAdd: "Ajouter l'add-on",
     addonCheckoutError: "Impossible d'activer l'add-on",
     addonActivatedToast: "Add-on active avec succes !",
-    addonManageHint: "Pour annuler l'add-on, utilisez le portail de facturation."
+    addonManageHint: "Pour annuler l'add-on, utilisez le portail de facturation.",
+    boost: {
+      title: "Mode Boost",
+      description: "Continuez a offrir l'essayage virtuel meme apres votre quota mensuel. Chaque essai supplementaire est facture 0.15€ sur votre facture Shopify.",
+      enabled: "Active",
+      disabled: "Desactive",
+      activate: "Activer le Mode Boost",
+      deactivate: "Desactiver le Mode Boost",
+      activated: "Mode Boost active !",
+      deactivated: "Mode Boost desactive",
+      usage: "{count} essais boost ce mois ({cost}€)",
+      cappedInfo: "Plafonne a 50€/mois maximum.",
+      error: "Erreur lors du changement",
+    },
   },
   products: {
     title: "Produits",
@@ -87,5 +100,60 @@ export const fr = {
     requiresPlanBody: "Vous devez etre abonne a un plan payant pour activer l'add-on.",
     checkoutError: "Impossible d'activer l'add-on",
     portalError: "Impossible d'ouvrir le portail de facturation"
+  },
+  onboarding: {
+    title: "Guide d'installation",
+    welcome: "Bienvenue sur Infinite Tryon !",
+    intro: "Suivez ces 4 etapes pour activer l'essayage virtuel IA sur votre boutique. Temps estime : 10 minutes.",
+    helpTitle: "Besoin d'aide ?",
+    helpBody: "Contactez-nous a support@infinitetryon.com — on vous repond en moins de 24h.",
+    plan: {
+      title: "Choisir votre plan",
+      description: "Selectionnez un plan adapte a votre catalogue. Vous pouvez commencer par le plan Starter (3 produits) et upgrader a tout moment.",
+      instructions: [
+        "Allez dans l'onglet Home de l'application",
+        "Choisissez un plan (Starter, Premium, Pro ou Ultimate)",
+        "Completez le paiement via Shopify",
+        "Votre plan est immediatement actif"
+      ],
+      important: null
+    },
+    theme: {
+      title: "Activer le widget sur votre theme",
+      description: "Ajoutez le bloc d'essayage virtuel sur vos pages produit. C'est ce que vos clients verront.",
+      instructions: [
+        "Allez dans Boutique en ligne > Themes > Personnaliser",
+        "Ouvrez une page produit (Product page)",
+        "Cliquez sur 'Ajouter un bloc' dans la section produit",
+        "Cherchez 'Essayage IA' dans la liste des blocs disponibles",
+        "Positionnez le bloc ou vous voulez (sous le bouton Ajouter au panier par exemple)",
+        "Cliquez sur Enregistrer"
+      ],
+      important: "Le bloc doit etre ajoute une seule fois — il s'affichera automatiquement sur toutes les pages produit."
+    },
+    products: {
+      title: "Configurer vos produits",
+      description: "Pour chaque produit, renseignez le type de produit dans Shopify. C'est indispensable pour que l'IA sache quel type de vetement essayer.",
+      instructions: [
+        "Allez dans Produits dans votre admin Shopify",
+        "Ouvrez chaque produit concerne",
+        "Remplissez le champ 'Type de produit' (ex: T-shirt, Jeans, Robe, Veste, Pantalon...)",
+        "Assurez-vous que la photo principale du produit montre bien le vetement seul (flat-lay ou mannequin)",
+        "Enregistrez chaque produit"
+      ],
+      important: "Le type de produit est essentiel ! Sans lui, l'IA ne saura pas si c'est un haut, un bas ou une robe, et le resultat sera de moins bonne qualite."
+    },
+    test: {
+      title: "Tester l'essayage",
+      description: "Verifiez que tout fonctionne en testant un essayage sur votre boutique.",
+      instructions: [
+        "Ouvrez votre boutique (ou le mode preview du theme)",
+        "Allez sur une page produit ou le bloc est actif",
+        "Uploadez une photo (corps entier, de face, bras le long du corps)",
+        "Cliquez sur 'Essayez avec l'IA' et attendez ~20 secondes",
+        "Verifiez le rendu — si le resultat n'est pas bon, essayez avec une meilleure photo"
+      ],
+      important: null
+    }
   }
 };

@@ -4,7 +4,6 @@ export const PLANS = {
   free: {
     name: "Free",
     priceMonthly: 0,
-    stripePriceId: null,
     maxProducts: 0,
     maxTryOnsPerMonth: 0,
     highlighted: false,
@@ -12,41 +11,38 @@ export const PLANS = {
   starter: {
     name: "Starter",
     priceMonthly: 19,
-    stripePriceId: process.env.STRIPE_PRICE_STARTER,
     maxProducts: 3,
-    maxTryOnsPerMonth: 300,
+    maxTryOnsPerMonth: 120,
     highlighted: false,
   },
   premium: {
     name: "Premium",
     priceMonthly: 49,
-    stripePriceId: process.env.STRIPE_PRICE_PREMIUM,
     maxProducts: 8,
-    maxTryOnsPerMonth: 800,
+    maxTryOnsPerMonth: 300,
     highlighted: false,
   },
   pro: {
     name: "Pro",
     priceMonthly: 89,
-    stripePriceId: process.env.STRIPE_PRICE_PRO,
     maxProducts: 20,
-    maxTryOnsPerMonth: 2000,
+    maxTryOnsPerMonth: 550,
     highlighted: true,
   },
   ultimate: {
     name: "Ultimate",
     priceMonthly: 179,
-    stripePriceId: process.env.STRIPE_PRICE_ULTIMATE,
     maxProducts: 999,
-    maxTryOnsPerMonth: 5000,
+    maxTryOnsPerMonth: 1100,
     highlighted: false,
   },
 };
 
+// Addon temporarily disabled during Shopify Billing migration.
+// Will be re-enabled via Shopify usage-based billing later.
 export const ADDON = {
   name: "Addon",
   priceMonthly: 15,
-  stripePriceId: process.env.STRIPE_PRICE_ADDON,
   extraProducts: 2,
   extraTryOns: 150,
 };

@@ -204,11 +204,16 @@ export async function canGenerateTryOn(shopDomain) {
     },
   });
 
+  const withinQuota = currentTryOnsCount < effectiveMaxTryOns;
+  const boostAllowed = !withinQuota && shop.boostEnabled;
+
   return {
-    allowed: currentTryOnsCount < effectiveMaxTryOns,
+    allowed: withinQuota || boostAllowed,
+    isBoost: boostAllowed,
     planKey,
     maxTryOnsPerMonth: effectiveMaxTryOns,
     currentTryOnsCount,
+    boostEnabled: shop.boostEnabled,
   };
 }
 
