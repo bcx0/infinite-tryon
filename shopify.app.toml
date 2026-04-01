@@ -2,7 +2,7 @@
 client_id = "a4b5548ad3c0d9d23ccfbf787f0892b5"
 name = "tryon-ai"
 handle = "tryon-ai-1"
-application_url = "https://infinite-tryon-production.up.railway.app"
+application_url = "https://infinite-tryon-production-b5cf.up.railway.app"
 embedded = true
 [build]
 automatically_update_urls_on_dev = true
@@ -19,9 +19,9 @@ api_version = "2025-07"
 scopes = "write_products"
 [auth]
 redirect_urls = [
-  "https://infinite-tryon-production.up.railway.app/auth/callback",
-  "https://infinite-tryon-production.up.railway.app/auth/shopify/callback",
-  "https://infinite-tryon-production.up.railway.app/api/auth/callback"
+  "https://infinite-tryon-production-b5cf.up.railway.app/auth/callback",
+  "https://infinite-tryon-production-b5cf.up.railway.app/auth/shopify/callback",
+  "https://infinite-tryon-production-b5cf.up.railway.app/api/auth/callback"
 ]
 [pos]
 embedded = false
