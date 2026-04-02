@@ -5,8 +5,13 @@ document.addEventListener("DOMContentLoaded", function () {
   const shopId = widget?.dataset.shopId;
   const productId = widget?.dataset.productId;
   const personImageUrl = widget?.dataset.personImageUrl || "";
+  // Migration: ignore stale backend URL that points to the old Railway domain (without -b5cf suffix)
+  let rawBackendUrl = window.TRYON_API_BASE || widget?.dataset.backendUrl || "";
+  if (rawBackendUrl && rawBackendUrl.includes("infinite-tryon-production.up.railway.app")) {
+    rawBackendUrl = ""; // fall through to correct default
+  }
   const apiBase =
-    (window.TRYON_API_BASE || widget?.dataset.backendUrl || "https://infinite-tryon-production-b5cf.up.railway.app").replace(
+    (rawBackendUrl || "https://infinite-tryon-production-b5cf.up.railway.app").replace(
       /\/$/,
       "",
     );
@@ -132,15 +137,21 @@ document.addEventListener("DOMContentLoaded", function () {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to verify product status");
+        // Distinguish real product-limit errors from server/auth issues
+        if (response.status === 401) {
+          console.error("[TryOn Widget] Session expired or missing — please reopen the app in Shopify admin.");
+          resultDiv.innerHTML = "Session expir\u00e9e. Veuillez r\u00e9ouvrir l\u2019application dans votre admin Shopify puis r\u00e9essayer.";
+          return false;
+        }
+        throw new Error("Unable to verify product status (HTTP " + response.status + ")");
       }
 
       const payload = await response.json();
       return Boolean(payload.allowed);
     } catch (error) {
-      console.error(error);
+      console.error("[TryOn Widget]", error);
       resultDiv.innerHTML =
-        "Impossible de verifier le statut de ce produit pour l'instant.";
+        "Impossible de v\u00e9rifier le statut de ce produit pour l\u2019instant. Veuillez r\u00e9essayer.";
       return false;
     }
   }
