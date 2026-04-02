@@ -1,6 +1,6 @@
 import { json, redirect } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Banner,
@@ -14,7 +14,7 @@ import {
   ProgressBar,
   Text,
 } from "@shopify/polaris";
-import { TitleBar, useAppBridge } from "@shopify/app-bridge-react";
+import { TitleBar } from "@shopify/app-bridge-react";
 import {
   CartesianGrid,
   Line,
@@ -211,7 +211,6 @@ export const loader = async ({ request }) => {
 
 export default function DashboardPage() {
   const data = useLoaderData();
-  const shopify = useAppBridge();
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [boostEnabled, setBoostEnabled] = useState(data.boostEnabled);
   const [boostLoading, setBoostLoading] = useState(false);
@@ -225,8 +224,10 @@ export default function DashboardPage() {
   const statusTone = getStatusTone(data.statusKey);
   const progressTone = getProgressTone(data.usageRatio);
 
-  // Show a toast for checkout outcomes on mount
-  useMemo(() => {
+  // Show a toast for checkout outcomes on mount (useEffect = client-only, avoids SSR crash)
+  useEffect(() => {
+    const shopify = window.shopify;
+    if (!shopify) return;
     if (data.checkoutResult === "success") {
       shopify.toast.show(t.checkoutSuccess || "Plan activated!");
     } else if (data.checkoutResult === "addon_success") {
@@ -254,18 +255,18 @@ export default function DashboardPage() {
       const payload = await response.json();
       if (response.ok) {
         setBoostEnabled(payload.boostEnabled);
-        shopify.toast.show(
+        window.shopify?.toast?.show(
           payload.boostEnabled
             ? (t.boost?.activated || "Mode Boost activé !")
             : (t.boost?.deactivated || "Mode Boost désactivé"),
         );
       }
     } catch {
-      shopify.toast.show(t.boost?.error || "Erreur");
+      window.shopify?.toast?.show(t.boost?.error || "Erreur");
     } finally {
       setBoostLoading(false);
     }
-  }, [shopify.toast, t.boost]);
+  }, [t.boost]);
 
   return (
     <Page>
