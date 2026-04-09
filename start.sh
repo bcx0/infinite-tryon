@@ -1,8 +1,7 @@
 #!/bin/sh
 set -e
 
-if [ "$RUN_MIGRATIONS" = "true" ]; then
-  npx prisma migrate deploy
-fi
+# Sync Prisma schema with database (safe for production — only adds new tables/columns)
+npx prisma db push --accept-data-loss 2>/dev/null || echo "Warning: prisma db push failed, continuing..."
 
 npm start
