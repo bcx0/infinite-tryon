@@ -181,5 +181,32 @@ export const fr = {
     save: "Enregistrer les parametres",
     saved: "Parametres enregistres avec succes !",
     saveError: "Impossible d'enregistrer les parametres"
+  },
+  analytics: {
+    title: "Analyse",
+    totalTryOns: "Essayages au total (tout le temps)",
+    tryOnsThisMonth: "Essayages ce mois",
+    successRate: "Taux de reussite",
+    topProduct: "Produit le plus populaire",
+    noData: "Aucune donnee disponible",
+    productBreakdown: "Ventilation par produit",
+    productId: "ID du produit",
+    totalCount: "Essayages au total",
+    successCount: "Essayages reussis",
+    errorRate: "Taux d'erreur",
+    lastTryOn: "Date du dernier essayage",
+    exportCsv: "Exporter CSV",
+    exportTitle: "Export reussi",
+    never: "Jamais"
+  },
+  notifications: {
+    title: "Notifications",
+    dismiss: "Ignorer",
+    dismissAll: "Ignorer tout",
+    quotaWarning: "Vous appuyez de votre quota d'essayages mensuel.",
+    quotaReached: "Vous avez atteint votre quota d'essayages mensuel.",
+    trialEnding: "Votre periode d'essai se termine bientot.",
+    welcome: "Bienvenue sur Infinite TryOn !",
+    noNotifications: "Pas de notifications"
   }
 };

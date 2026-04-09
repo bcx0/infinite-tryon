@@ -29,6 +29,7 @@ import { getLocale } from "../locales";
 import { PLANS } from "../config/plans";
 import { authenticate } from "../shopify.server";
 import { getOrCreateShop, normalizePlanKey } from "../services/shopService.server";
+import { getUnreadNotifications, createNotification, hasNotificationThisMonth } from "../services/notifications.server";
 
 const DASHBOARD_PLAN_KEYS = ["starter", "premium", "pro", "ultimate"];
 const ACTIVITY_DAYS = 30;
@@ -181,6 +182,30 @@ export const loader = async ({ request }) => {
   const boostTryOns = Math.max(0, tryOnsMonth - effectiveMaxTryOns);
   const boostCost = (boostTryOns * 0.15).toFixed(2);
 
+  // Auto-create notifications based on quota usage
+  if (usageRatio >= 0.8 && usageRatio < 1) {
+    const hasWarning = await hasNotificationThisMonth(shopDomain, "quota_warning");
+    if (!hasWarning) {
+      await createNotification(
+        shopDomain,
+        "quota_warning",
+        messages.notifications.quotaWarning || "You are approaching your monthly try-on quota."
+      );
+    }
+  } else if (usageRatio >= 1) {
+    const hasReached = await hasNotificationThisMonth(shopDomain, "quota_reached");
+    if (!hasReached) {
+      await createNotification(
+        shopDomain,
+        "quota_reached",
+        messages.notifications.quotaReached || "You have reached your monthly try-on quota."
+      );
+    }
+  }
+
+  // Get unread notifications
+  const unreadNotifications = await getUnreadNotifications(shopDomain);
+
   return json({
     lang,
     messages,
@@ -198,6 +223,7 @@ export const loader = async ({ request }) => {
     boostEnabled: shop.boostEnabled || false,
     boostTryOns,
     boostCost,
+    unreadNotifications,
     plans: DASHBOARD_PLAN_KEYS.map((key) => ({
       key,
       name: PLANS[key].name,
@@ -214,8 +240,10 @@ export default function DashboardPage() {
   const [loadingPlan, setLoadingPlan] = useState(null);
   const [boostEnabled, setBoostEnabled] = useState(data.boostEnabled);
   const [boostLoading, setBoostLoading] = useState(false);
+  const [dismissedNotifications, setDismissedNotifications] = useState({});
 
   const t = data.messages.dashboard;
+  const nt = data.messages.notifications;
 
   const usagePercent = useMemo(() => {
     return Math.max(0, Math.min(100, Math.round(data.usageRatio * 100)));
@@ -268,6 +296,39 @@ export default function DashboardPage() {
     }
   }, [t.boost]);
 
+  const handleDismissNotification = useCallback(async (notificationId) => {
+    try {
+      const response = await fetch(`/app/notifications?action=mark_read&id=${notificationId}`, {
+        method: "POST",
+      });
+      if (response.ok) {
+        setDismissedNotifications((prev) => ({
+          ...prev,
+          [notificationId]: true,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to dismiss notification:", error);
+    }
+  }, []);
+
+  const handleDismissAll = useCallback(async () => {
+    try {
+      const response = await fetch("/app/notifications?action=mark_all_read", {
+        method: "POST",
+      });
+      if (response.ok) {
+        const newDismissed = {};
+        data.unreadNotifications.forEach((notif) => {
+          newDismissed[notif.id] = true;
+        });
+        setDismissedNotifications(newDismissed);
+      }
+    } catch (error) {
+      console.error("Failed to dismiss all notifications:", error);
+    }
+  }, [data.unreadNotifications]);
+
   return (
     <Page>
       <TitleBar title={t.title} />
@@ -275,6 +336,44 @@ export default function DashboardPage() {
         <Layout>
           <Layout.Section>
             <BlockStack gap="300">
+              {/* Notifications Banner */}
+              {data.unreadNotifications && data.unreadNotifications.length > 0 && (
+                <Card>
+                  <BlockStack gap="300">
+                    <InlineStack align="space-between" blockAlign="center">
+                      <Text as="h3" variant="headingSm">
+                        {nt.title || "Notifications"}
+                      </Text>
+                      <Button variant="plain" onClick={handleDismissAll}>
+                        {nt.dismissAll || "Dismiss all"}
+                      </Button>
+                    </InlineStack>
+                    <BlockStack gap="200">
+                      {data.unreadNotifications
+                        .filter((notif) => !dismissedNotifications[notif.id])
+                        .map((notif) => (
+                          <InlineStack
+                            key={notif.id}
+                            align="space-between"
+                            blockAlign="center"
+                            gap="300"
+                          >
+                            <Text as="p" variant="bodyMd">
+                              {notif.message}
+                            </Text>
+                            <Button
+                              variant="plain"
+                              onClick={() => handleDismissNotification(notif.id)}
+                            >
+                              {nt.dismiss || "Dismiss"}
+                            </Button>
+                          </InlineStack>
+                        ))}
+                    </BlockStack>
+                  </BlockStack>
+                </Card>
+              )}
+
               {data.planKey === "free" ? (
                 <Banner
                   tone="info"

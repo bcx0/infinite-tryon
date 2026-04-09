@@ -4,10 +4,10 @@ import db from "../db.server";
 import { isProductAllowed } from "../services/productAccess.server";
 import { canGenerateTryOn, logTryOn } from "../services/shopService.server";
 import { corsHeaders } from "../utils/cors.server";
+import { checkRateLimit } from "../utils/rateLimit.server";
 
 const RATE_LIMIT_MAX_REQUESTS = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const rateLimitByShop = new Map();
 
 export const loader = async ({ request }) => {
   if (request.method === "OPTIONS") {
@@ -51,21 +51,6 @@ async function hasValidSessionForShop(shopDomain) {
   return Boolean(session?.id);
 }
 
-function checkAndIncrementRateLimit(shopDomain) {
-  const now = Date.now();
-  const current = rateLimitByShop.get(shopDomain);
-  if (!current || now - current.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateLimitByShop.set(shopDomain, { count: 1, windowStart: now });
-    return { limited: false };
-  }
-  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
-    const retryAfterMs = RATE_LIMIT_WINDOW_MS - (now - current.windowStart);
-    return { limited: true, retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
-  }
-  current.count += 1;
-  return { limited: false };
-}
-
 export const action = async ({ request }) => {
   const headers = corsHeaders(request);
 
@@ -85,7 +70,7 @@ export const action = async ({ request }) => {
       return json({ success: false, error: "Invalid x-shop-domain: no active session" }, { status: 401, headers });
     }
 
-    const rateLimit = checkAndIncrementRateLimit(headerShopDomain);
+    const rateLimit = await checkRateLimit(`tryon:${headerShopDomain}`, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS);
     if (rateLimit.limited) {
       return json({ success: false, error: "Rate limit exceeded", retry_after_seconds: rateLimit.retryAfterSeconds }, { status: 429, headers });
     }

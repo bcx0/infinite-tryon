@@ -181,5 +181,32 @@ export const en = {
     save: "Save Settings",
     saved: "Settings saved successfully!",
     saveError: "Failed to save settings"
+  },
+  analytics: {
+    title: "Analytics",
+    totalTryOns: "Total try-ons (all time)",
+    tryOnsThisMonth: "Try-ons this month",
+    successRate: "Success rate",
+    topProduct: "Most popular product",
+    noData: "No data available",
+    productBreakdown: "Per-product breakdown",
+    productId: "Product ID",
+    totalCount: "Total try-ons",
+    successCount: "Successful try-ons",
+    errorRate: "Error rate",
+    lastTryOn: "Last try-on date",
+    exportCsv: "Export CSV",
+    exportTitle: "Export successful",
+    never: "Never"
+  },
+  notifications: {
+    title: "Notifications",
+    dismiss: "Dismiss",
+    dismissAll: "Dismiss all",
+    quotaWarning: "You are approaching your monthly try-on quota.",
+    quotaReached: "You have reached your monthly try-on quota.",
+    trialEnding: "Your trial period is ending soon.",
+    welcome: "Welcome to Infinite TryOn!",
+    noNotifications: "No notifications"
   }
 };

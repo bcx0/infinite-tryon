@@ -2,8 +2,8 @@ import { json } from "@remix-run/node";
 import { isProductAllowed } from "../services/productAccess.server";
 import db from "../db.server";
 import { corsHeaders } from "../utils/cors.server";
+import { checkRateLimit } from "../utils/rateLimit.server";
 
-const checkProductRateLimit = new Map();
 const CHECK_PRODUCT_MAX = 20;
 const CHECK_PRODUCT_WINDOW_MS = 60_000;
 
@@ -16,20 +16,6 @@ export const loader = async ({ request }) => {
   }
   return json({ error: "Method not allowed" }, { status: 405 });
 };
-
-function isRateLimited(shopId) {
-  const now = Date.now();
-  const entry = checkProductRateLimit.get(shopId);
-  if (!entry || now - entry.windowStart > CHECK_PRODUCT_WINDOW_MS) {
-    checkProductRateLimit.set(shopId, { windowStart: now, count: 1 });
-    return false;
-  }
-  if (entry.count >= CHECK_PRODUCT_MAX) {
-    return true;
-  }
-  entry.count += 1;
-  return false;
-}
 
 async function hasValidSessionForShop(shopDomain) {
   const session = await db.session.findFirst({
@@ -63,8 +49,9 @@ export const action = async ({ request }) => {
 
   const normalizedShopId = String(shopId).trim().toLowerCase();
 
-  if (isRateLimited(normalizedShopId)) {
-    return json({ error: "Too many requests" }, { status: 429, headers: corsHeaders(request) });
+  const rateLimit = await checkRateLimit(`check:${normalizedShopId}`, CHECK_PRODUCT_MAX, CHECK_PRODUCT_WINDOW_MS);
+  if (rateLimit.limited) {
+    return json({ error: "Too many requests", retry_after_seconds: rateLimit.retryAfterSeconds }, { status: 429, headers: corsHeaders(request) });
   }
 
   const validSession = await hasValidSessionForShop(normalizedShopId);

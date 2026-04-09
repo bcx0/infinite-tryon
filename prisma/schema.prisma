@@ -37,12 +37,7 @@ model Shop {
   plan                 String     @default("free")
   trialEndsAt          DateTime?
   isActive             Boolean    @default(true)
-  stripeCustomerId     String?
-  stripeSubscriptionId String?
-  stripeStatus         String?
-  currentPeriodEnd     DateTime?
   addonActive          Boolean    @default(false)
-  addonSubscriptionId  String?
   boostEnabled         Boolean    @default(false)
   widgetLanguage       String     @default("auto")
   widgetPrimaryColor   String     @default("#111111")
@@ -52,6 +47,7 @@ model Shop {
   updatedAt            DateTime   @updatedAt
   products             Product[]
   tryOnLogs            TryOnLog[]
+  notifications        Notification[]
 }
 
 model Product {
@@ -74,4 +70,25 @@ model TryOnLog {
   errorMessage  String?
   createdAt     DateTime @default(now())
   shop          Shop     @relation(fields: [shopDomain], references: [shopDomain], onDelete: Cascade)
+}
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+
+  @@index([key])
+}
+
+model Notification {
+  id         String   @id @default(cuid())
+  shopDomain String
+  type       String   // "trial_ending", "quota_warning", "quota_reached", "welcome"
+  message    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  shop       Shop     @relation(fields: [shopDomain], references: [shopDomain], onDelete: Cascade)
+
+  @@index([shopDomain, isRead])
 }
