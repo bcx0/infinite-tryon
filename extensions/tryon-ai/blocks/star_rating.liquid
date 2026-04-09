@@ -1,82 +1,499 @@
 <style>
-  #tryon-widget {
-    font-family: Arial, sans-serif;
-    max-width: 400px;
-    margin-top: 30px;
+  :root {
+    --tryon-primary: {{ block.settings.primary_color | default: '#111111' }};
+    --tryon-primary-dark: color-mix(in srgb, var(--tryon-primary) 80%, black);
+    --tryon-border: #e5e5e5;
+    --tryon-bg-light: #f9f9f9;
+    --tryon-text-primary: #1a1a1a;
+    --tryon-text-secondary: #666666;
+    --tryon-success: #10b981;
+    --tryon-error: #ef4444;
   }
 
-  #tryon-form {
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --tryon-border: #3a3a3a;
+      --tryon-bg-light: #1f1f1f;
+      --tryon-text-primary: #f5f5f5;
+      --tryon-text-secondary: #b0b0b0;
+    }
+  }
+
+  #tryon-widget {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--tryon-text-primary);
+    margin: 30px 0;
+  }
+
+  .tryon-container {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .tryon-header {
+    margin-bottom: 24px;
+  }
+
+  .tryon-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    margin: 0 0 8px 0;
+    line-height: 1.2;
+  }
+
+  .tryon-subtitle {
+    font-size: 14px;
+    color: var(--tryon-text-secondary);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .tryon-card {
+    background: var(--tryon-bg-light);
+    border: 1px solid var(--tryon-border);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .tryon-form {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 20px;
   }
 
-  #tryon-form input[type="file"] {
-    padding: 10px;
-    border: 2px dashed #ccc;
-    border-radius: 6px;
-    background-color: #f8f8f8;
+  .tryon-form.disabled {
+    opacity: 0.6;
+    pointer-events: none;
   }
 
-  #tryon-form button {
-    padding: 10px;
-    background-color: #111;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-  }
-
-  #tryon-form button:hover {
-    background-color: #333;
-  }
-
-  .loader {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #000;
-    border-radius: 50%;
-    width: 30px;
-    height: 30px;
-    animation: spin 1s linear infinite;
-    margin: auto;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
-  #tryon-result {
-    margin-top: 20px;
+  .tryon-dropzone {
+    position: relative;
+    border: 2px dashed var(--tryon-border);
+    border-radius: 10px;
+    padding: 32px 20px;
     text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: transparent;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .tryon-dropzone:hover:not(.has-preview) {
+    border-color: var(--tryon-primary);
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+
+  .tryon-dropzone.dragging {
+    border-color: var(--tryon-primary);
+    background-color: rgba(0, 0, 0, 0.04);
+    box-shadow: 0 0 0 4px rgba(0, 0, 0, 0.08);
+  }
+
+  .tryon-dropzone-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    opacity: 0.7;
+  }
+
+  .tryon-dropzone-text {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 8px 0;
+  }
+
+  .tryon-dropzone-hint {
+    font-size: 12px;
+    color: var(--tryon-text-secondary);
+    margin: 0;
+  }
+
+  .tryon-preview-wrapper {
+    position: relative;
+    margin: -32px -20px;
+    padding: 20px;
+  }
+
+  .tryon-preview-image {
+    width: 100%;
+    height: auto;
+    max-width: 200px;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .tryon-preview-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+
+  .tryon-preview-remove:hover {
+    background: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .tryon-file-input {
+    display: none;
+  }
+
+  .tryon-button {
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .tryon-button-primary {
+    background-color: var(--tryon-primary);
+    color: white;
+  }
+
+  .tryon-button-primary:hover:not(:disabled) {
+    background-color: var(--tryon-primary-dark);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .tryon-button-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  .tryon-button-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .tryon-button-secondary {
+    background-color: transparent;
+    color: var(--tryon-primary);
+    border: 1.5px solid var(--tryon-primary);
+  }
+
+  .tryon-button-secondary:hover:not(:disabled) {
+    background-color: rgba(0, 0, 0, 0.04);
+  }
+
+  .tryon-button-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .tryon-loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 0;
+  }
+
+  .tryon-progress-bar {
+    width: 100%;
+    height: 3px;
+    background-color: var(--tryon-border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .tryon-progress-fill {
+    height: 100%;
+    background-color: var(--tryon-primary);
+    width: 0%;
+    animation: tryon-progress 2.5s ease-in-out infinite;
+  }
+
+  @keyframes tryon-progress {
+    0% { width: 0%; }
+    30% { width: 30%; }
+    60% { width: 60%; }
+    100% { width: 90%; }
+  }
+
+  .tryon-status {
+    text-align: center;
+  }
+
+  .tryon-status-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+  }
+
+  .tryon-status-elapsed {
+    font-size: 12px;
+    color: var(--tryon-text-secondary);
+    margin: 0;
+  }
+
+  .tryon-result-container {
+    text-align: center;
+  }
+
+  .tryon-result-image {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    display: block;
+  }
+
+  .tryon-disclaimer {
+    font-size: 12px;
+    color: var(--tryon-text-secondary);
+    margin: 12px 0 0 0;
+    line-height: 1.5;
+    font-style: italic;
+  }
+
+  .tryon-error {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--tryon-error);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .tryon-success {
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--tryon-success);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.5;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  @media (max-width: 480px) {
+    .tryon-card {
+      padding: 16px;
+    }
+
+    .tryon-dropzone {
+      padding: 24px 16px;
+      min-height: 100px;
+    }
+
+    .tryon-dropzone-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+
+    .tryon-dropzone-text {
+      font-size: 13px;
+    }
+
+    .tryon-title {
+      font-size: 19px;
+    }
+
+    .tryon-button {
+      min-height: 44px;
+      font-size: 13px;
+    }
+  }
+
+  /* Accessibility */
+  .tryon-button:focus-visible {
+    outline: 2px solid var(--tryon-primary);
+    outline-offset: 2px;
+  }
+
+  .tryon-dropzone:focus-visible {
+    outline: 2px solid var(--tryon-primary);
+    outline-offset: 2px;
   }
 </style>
 
-<div id="tryon-widget" data-shop-id="{{ shop.permanent_domain }}" data-product-id="{{ product.id }}" data-backend-url="{{ block.settings.backend_url }}">
-  <h3>Essayez ce produit virtuellement !</h3>
-  <form id="tryon-form">
-    <label for="userPhoto">Votre photo :</label>
-    <input type="file" id="userPhoto" accept="image/*" required>
-    <input type="hidden" id="productPhoto" value="{{ product.featured_image | image_url }}">
-    <button type="submit">Essayez avec l'IA</button>
-  </form>
-  <div id="tryon-result" style="margin-top:20px;"></div>
+<div id="tryon-widget"
+  class="tryon-widget"
+  data-shop-id="{{ shop.permanent_domain }}"
+  data-product-id="{{ product.id }}"
+  data-garment-image-url="{{ product.featured_image | image_url }}"
+  data-backend-url="{{ block.settings.backend_url }}"
+  data-widget-language="{{ block.settings.widget_language | default: 'auto' }}"
+  data-button-style="{{ block.settings.button_style | default: 'filled' }}"
+  data-show-disclaimer="{{ block.settings.show_disclaimer | default: true }}">
+
+  <div class="tryon-container">
+    <div class="tryon-header">
+      <h3 class="tryon-title" id="tryon-title">Virtual Try-On</h3>
+      <p class="tryon-subtitle" id="tryon-subtitle">Try this garment on your photo</p>
+    </div>
+
+    <div class="tryon-card">
+      <form id="tryon-form" class="tryon-form">
+        <!-- Dropzone -->
+        <div class="tryon-dropzone" id="tryon-dropzone">
+          <div class="tryon-dropzone-icon">📸</div>
+          <p class="tryon-dropzone-text" id="dropzone-text">Drag your photo here or click to select</p>
+          <p class="tryon-dropzone-hint" id="dropzone-hint">Full body photo, facing camera, arms at sides</p>
+        </div>
+
+        <!-- Preview -->
+        <div id="tryon-preview" style="display: none;">
+          <div class="tryon-preview-wrapper">
+            <img id="tryon-preview-image" class="tryon-preview-image" alt="Selected photo">
+            <button type="button" class="tryon-preview-remove" id="tryon-preview-remove" aria-label="Remove photo">✕</button>
+          </div>
+        </div>
+
+        <!-- Hidden file input -->
+        <input type="file" id="tryon-file-input" class="tryon-file-input" accept="image/jpeg,image/png,image/webp">
+
+        <!-- Submit button -->
+        <button type="submit" class="tryon-button" id="tryon-submit-btn" style="margin-top: 8px;">
+          <span id="submit-text">Try it on</span>
+        </button>
+      </form>
+
+      <!-- Loading state -->
+      <div id="tryon-loading" style="display: none;">
+        <div class="tryon-loading-container">
+          <div class="tryon-progress-bar">
+            <div class="tryon-progress-fill"></div>
+          </div>
+          <div class="tryon-status">
+            <p class="tryon-status-title" id="tryon-status-title">Analyzing your photo…</p>
+            <p class="tryon-status-elapsed" id="tryon-status-elapsed">Estimated time: ~20 seconds</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result state -->
+      <div id="tryon-result" style="display: none;">
+        <div class="tryon-result-container">
+          <img id="tryon-result-image" class="tryon-result-image" alt="Virtual try-on result">
+          <p class="tryon-disclaimer" id="tryon-disclaimer" style="display: none;">AI-generated preview — actual appearance may slightly vary.</p>
+          <button type="button" class="tryon-button tryon-button-secondary" id="tryon-retry-btn" style="margin-top: 12px;">
+            <span id="retry-text">Try again</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Error state -->
+      <div id="tryon-error" style="display: none;">
+        <div class="tryon-error" id="tryon-error-message"></div>
+        <button type="button" class="tryon-button tryon-button-secondary" id="tryon-reset-btn" style="margin-top: 12px;">
+          <span id="reset-text">Try again</span>
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
+<script defer>
+  // Initialize widget when DOM is ready
+  (function() {
+    const initWidget = () => {
+      const { TryOnWidget } = window;
+      if (TryOnWidget) {
+        TryOnWidget.init();
+      }
+    };
 
-{{  'tryon-widget.js' | asset_url | script_tag }}
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initWidget);
+    } else {
+      initWidget();
+    }
+  })();
+</script>
+
+<script defer src="{{ 'tryon-widget.js' | asset_url }}"></script>
+
 {% schema %}
 {
-  "name": "Essayage IA",
+  "name": "Virtual Try-On",
   "target": "section",
   "settings": [
     {
       "type": "text",
       "id": "backend_url",
-      "label": "Backend URL",
+      "label": "Backend API URL",
       "default": "https://infinite-tryon-production-b5cf.up.railway.app",
-      "info": "URL de votre app Railway (ex: https://your-app.railway.app)"
+      "info": "URL of your backend API (e.g., https://your-api.railway.app)"
+    },
+    {
+      "type": "select",
+      "id": "widget_language",
+      "label": "Widget Language",
+      "default": "auto",
+      "options": [
+        {
+          "value": "auto",
+          "label": "Auto-detect (based on page language)"
+        },
+        {
+          "value": "fr",
+          "label": "French (Français)"
+        },
+        {
+          "value": "en",
+          "label": "English"
+        }
+      ]
+    },
+    {
+      "type": "color",
+      "id": "primary_color",
+      "label": "Primary Color",
+      "default": "#111111"
+    },
+    {
+      "type": "select",
+      "id": "button_style",
+      "label": "Button Style",
+      "default": "filled",
+      "options": [
+        {
+          "value": "filled",
+          "label": "Filled (solid background)"
+        },
+        {
+          "value": "outline",
+          "label": "Outline (border only)"
+        }
+      ]
+    },
+    {
+      "type": "checkbox",
+      "id": "show_disclaimer",
+      "label": "Show AI disclaimer",
+      "default": true
     }
   ]
 }

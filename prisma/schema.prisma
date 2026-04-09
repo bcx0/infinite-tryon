@@ -44,6 +44,10 @@ model Shop {
   addonActive          Boolean    @default(false)
   addonSubscriptionId  String?
   boostEnabled         Boolean    @default(false)
+  widgetLanguage       String     @default("auto")
+  widgetPrimaryColor   String     @default("#111111")
+  widgetButtonStyle    String     @default("filled")
+  widgetShowDisclaimer Boolean    @default(true)
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
   products             Product[]

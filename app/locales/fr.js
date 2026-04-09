@@ -155,5 +155,31 @@ export const fr = {
       ],
       important: null
     }
+  },
+  settings: {
+    title: "Parametres",
+    widgetSettings: "Parametres du widget",
+    language: "Langue du widget",
+    languageAuto: "Auto (detecter depuis le navigateur)",
+    languageFr: "Francais",
+    languageEn: "Anglais",
+    primaryColor: "Couleur principale",
+    primaryColorHint: "Choisissez la couleur principale du widget",
+    buttonStyle: "Style du bouton",
+    buttonFilled: "Plein",
+    buttonOutline: "Contour",
+    showDisclaimer: "Afficher la clause de non-responsabilite",
+    disclaimerHint: "Afficher des conditions supplementaires sous le widget",
+    accountInfo: "Informations du compte",
+    shopDomain: "Domaine de la boutique",
+    currentPlan: "Plan actuel",
+    memberSince: "Membre depuis",
+    support: "Support",
+    supportText: "Besoin d'aide ou avez-vous des questions ?",
+    supportEmail: "Contacter le support",
+    appVersion: "Version de l'application",
+    save: "Enregistrer les parametres",
+    saved: "Parametres enregistres avec succes !",
+    saveError: "Impossible d'enregistrer les parametres"
   }
 };

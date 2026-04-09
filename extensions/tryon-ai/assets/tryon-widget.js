@@ -1,167 +1,480 @@
-document.addEventListener("DOMContentLoaded", function () {
-  const widget = document.getElementById("tryon-widget");
-  const form = document.getElementById("tryon-form");
-  const resultDiv = document.getElementById("tryon-result");
-  const shopId = widget?.dataset.shopId;
-  const productId = widget?.dataset.productId;
-  const personImageUrl = widget?.dataset.personImageUrl || "";
-  // Migration: ignore stale backend URL that points to the old Railway domain (without -b5cf suffix)
-  let rawBackendUrl = window.TRYON_API_BASE || widget?.dataset.backendUrl || "";
-  if (rawBackendUrl && rawBackendUrl.includes("infinite-tryon-production.up.railway.app")) {
-    rawBackendUrl = ""; // fall through to correct default
-  }
-  const apiBase =
-    (rawBackendUrl || "https://infinite-tryon-production-b5cf.up.railway.app").replace(
-      /\/$/,
-      "",
-    );
-  const checkProductUrl = `${apiBase || ""}/api/check-product`;
-  const tryOnUrl = `${apiBase || ""}/api/tryon`;
-  const limitMessage =
-    "Vous avez atteint la limite de produits pour votre abonnement. Passez au plan superieur pour activer l'essayage IA sur ce produit.";
+/**
+ * Infinite TryOn Widget
+ * Modern, responsive, localized virtual try-on widget for Shopify
+ */
 
-  if (!widget || !form || !resultDiv) {
-    return;
-  }
+(function() {
+  'use strict';
 
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
-
-    const userPhoto = document.getElementById("userPhoto")?.files?.[0] || null;
-    let garmentImageUrl = document.getElementById("productPhoto")?.value || "";
-    if (garmentImageUrl.startsWith("//")) {
-      garmentImageUrl = "https:" + garmentImageUrl;
+  // Translation strings
+  const TRANSLATIONS = {
+    fr: {
+      title: 'Essayage virtuel',
+      subtitle: 'Essayez ce vêtement sur votre photo',
+      dropzone: 'Glissez votre photo ici ou cliquez pour sélectionner',
+      dropzoneHint: 'Photo en pied, de face, bras le long du corps',
+      fileTooLarge: 'Fichier trop volumineux (max 10 Mo)',
+      invalidFormat: 'Format non supporté. Utilisez JPG, PNG ou WebP.',
+      generate: 'Essayer virtuellement',
+      generating: 'Génération en cours…',
+      step1: 'Analyse de votre photo…',
+      step2: 'Application du vêtement…',
+      step3: 'Finalisation…',
+      tryAgain: 'Réessayer',
+      disclaimer: 'Aperçu généré par IA — le rendu réel peut légèrement varier.',
+      sessionExpired: 'Session expirée. Veuillez réouvrir l\'application dans l\'admin Shopify.',
+      limitReached: 'Limite de produits atteinte pour votre abonnement.',
+      connectionError: 'Erreur de connexion. Veuillez réessayer.',
+      remove: 'Supprimer'
+    },
+    en: {
+      title: 'Virtual Try-On',
+      subtitle: 'Try this garment on your photo',
+      dropzone: 'Drag your photo here or click to select',
+      dropzoneHint: 'Full body photo, facing camera, arms at sides',
+      fileTooLarge: 'File too large (max 10 MB)',
+      invalidFormat: 'Unsupported format. Use JPG, PNG or WebP.',
+      generate: 'Try it on',
+      generating: 'Generating…',
+      step1: 'Analyzing your photo…',
+      step2: 'Applying the garment…',
+      step3: 'Finalizing…',
+      tryAgain: 'Try again',
+      disclaimer: 'AI-generated preview — actual appearance may slightly vary.',
+      sessionExpired: 'Session expired. Please reopen the app in Shopify admin.',
+      limitReached: 'Product limit reached for your subscription.',
+      connectionError: 'Connection error. Please try again.',
+      remove: 'Remove'
     }
+  };
 
-    if (!shopId || !productId) {
-      resultDiv.innerHTML =
-        "Configuration manquante pour identifier la boutique ou le produit.";
-      return;
-    }
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+  const ALLOWED_FORMATS = ['image/jpeg', 'image/png', 'image/webp'];
 
-    if (!garmentImageUrl) {
-      resultDiv.innerHTML = "Visuel produit introuvable.";
-      return;
-    }
+  class TryOnWidget {
+    constructor(element) {
+      this.element = element;
+      this.state = 'idle'; // idle, loading, success, error
+      this.selectedFile = null;
+      this.elapsedSeconds = 0;
 
-    if (!userPhoto && !personImageUrl) {
-      alert(
-        "Veuillez selectionner une photo de vous ou fournir une URL de photo.",
-      );
-      return;
-    }
+      // Get configuration from data attributes
+      this.shopId = element.dataset.shopId;
+      this.productId = element.dataset.productId;
+      this.garmentImageUrl = element.dataset.garmentImageUrl;
+      this.showDisclaimer = element.dataset.showDisclaimer !== 'false';
+      this.buttonStyle = element.dataset.buttonStyle || 'filled';
 
-    resultDiv.innerHTML = "Verification de l'eligibilite du produit...";
-    const allowed = await verifyProductAllowed(shopId, productId);
+      // Get language preference
+      this.language = this.detectLanguage(element.dataset.widgetLanguage);
 
-    if (!allowed) {
-      resultDiv.innerHTML = limitMessage;
-      return;
-    }
+      // Setup API base URL with migration fallback
+      this.apiBase = this.setupApiBase(element.dataset.backendUrl);
+      this.checkProductUrl = `${this.apiBase}/api/check-product`;
+      this.tryOnUrl = `${this.apiBase}/api/tryon`;
 
-    let seconds = 0;
-    const timerEl = '__tryon_timer__';
-    resultDiv.innerHTML =
-      '<div class="loader"></div>' +
-      '<p style="margin-top:12px;font-weight:600;font-size:15px;">Notre IA cr\u00e9e votre essayage virtuel\u2026</p>' +
-      '<p id="' + timerEl + '" style="margin-top:4px;color:#888;font-size:13px;">Temps estim\u00e9 : ~20 secondes</p>';
-    const timer = setInterval(function () {
-      seconds++;
-      const el = document.getElementById(timerEl);
-      if (el) {
-        if (seconds < 15) {
-          el.textContent = 'Analyse du v\u00eatement et de votre photo\u2026 (' + seconds + 's)';
-        } else if (seconds < 25) {
-          el.textContent = 'G\u00e9n\u00e9ration en cours, presque termin\u00e9\u2026 (' + seconds + 's)';
-        } else {
-          el.textContent = 'Finalisation de l\u2019image\u2026 (' + seconds + 's)';
-        }
+      // Normalize garment image URL
+      if (this.garmentImageUrl?.startsWith('//')) {
+        this.garmentImageUrl = 'https:' + this.garmentImageUrl;
       }
-    }, 1000);
-    form.querySelector("button[type='submit']")?.setAttribute("disabled", "true");
 
-    try {
-      const personImageBase64 = userPhoto ? await toBase64(userPhoto) : "";
-      const response = await fetch(tryOnUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-shop-domain": shopId,
-        },
-        body: JSON.stringify({
-          shop_id: shopId,
-          product_id: productId,
-          garmentImageUrl,
-          personImageBase64,
-          personImageUrl: personImageUrl || undefined,
-        }),
+      // Get DOM elements
+      this.form = element.querySelector('#tryon-form');
+      this.dropzone = element.querySelector('#tryon-dropzone');
+      this.fileInput = element.querySelector('#tryon-file-input');
+      this.preview = element.querySelector('#tryon-preview');
+      this.previewImage = element.querySelector('#tryon-preview-image');
+      this.previewRemove = element.querySelector('#tryon-preview-remove');
+      this.submitBtn = element.querySelector('#tryon-submit-btn');
+      this.loadingContainer = element.querySelector('#tryon-loading');
+      this.resultContainer = element.querySelector('#tryon-result');
+      this.resultImage = element.querySelector('#tryon-result-image');
+      this.retryBtn = element.querySelector('#tryon-retry-btn');
+      this.errorContainer = element.querySelector('#tryon-error');
+      this.errorMessage = element.querySelector('#tryon-error-message');
+      this.resetBtn = element.querySelector('#tryon-reset-btn');
+      this.statusTitle = element.querySelector('#tryon-status-title');
+      this.statusElapsed = element.querySelector('#tryon-status-elapsed');
+      this.disclaimerEl = element.querySelector('#tryon-disclaimer');
+
+      // Apply translations
+      this.applyTranslations();
+      this.applyButtonStyle();
+
+      // Setup event listeners
+      this.setupEventListeners();
+
+      // Validate configuration
+      this.validateConfiguration();
+    }
+
+    detectLanguage(setting) {
+      if (setting === 'fr') return 'fr';
+      if (setting === 'en') return 'en';
+
+      // Auto-detect: check HTML lang, then Shopify locale
+      const htmlLang = document.documentElement.lang;
+      if (htmlLang?.startsWith('fr')) return 'fr';
+
+      if (window.Shopify?.locale?.startsWith('fr')) return 'fr';
+
+      // Default to French for FR/BE/LU markets, English otherwise
+      return 'en';
+    }
+
+    setupApiBase(backendUrl) {
+      // Migration logic: ignore old Railway URL without -b5cf suffix
+      let url = window.TRYON_API_BASE || backendUrl || '';
+
+      if (url && url.includes('infinite-tryon-production.up.railway.app')) {
+        url = '';
+      }
+
+      const base =
+        (url || 'https://infinite-tryon-production-b5cf.up.railway.app').replace(/\/$/, '');
+
+      return base;
+    }
+
+    applyTranslations() {
+      const t = this.getTranslation.bind(this);
+
+      document.querySelector('#tryon-title').textContent = t('title');
+      document.querySelector('#tryon-subtitle').textContent = t('subtitle');
+      document.querySelector('#dropzone-text').textContent = t('dropzone');
+      document.querySelector('#dropzone-hint').textContent = t('dropzoneHint');
+      document.querySelector('#submit-text').textContent = t('generate');
+      document.querySelector('#retry-text').textContent = t('tryAgain');
+      document.querySelector('#reset-text').textContent = t('tryAgain');
+
+      if (this.disclaimerEl) {
+        this.disclaimerEl.textContent = t('disclaimer');
+      }
+
+      // Update file input accept attribute hint (implicit in input)
+      this.fileInput.title = t('dropzoneHint');
+    }
+
+    applyButtonStyle() {
+      const isOutline = this.buttonStyle === 'outline';
+      const className = isOutline ? 'tryon-button-secondary' : 'tryon-button-primary';
+      const otherClass = isOutline ? 'tryon-button-primary' : 'tryon-button-secondary';
+
+      this.submitBtn.classList.add(className);
+      this.submitBtn.classList.remove(otherClass);
+      this.retryBtn.classList.add('tryon-button-secondary');
+      this.resetBtn.classList.add('tryon-button-secondary');
+    }
+
+    getTranslation(key) {
+      return TRANSLATIONS[this.language]?.[key] || TRANSLATIONS.en[key] || key;
+    }
+
+    validateConfiguration() {
+      if (!this.shopId || !this.productId) {
+        this.showError('Configuration error: missing shop or product ID');
+      }
+      if (!this.garmentImageUrl) {
+        this.showError('Configuration error: product image not found');
+      }
+    }
+
+    setupEventListeners() {
+      // Dropzone drag and drop
+      this.dropzone.addEventListener('click', () => this.fileInput.click());
+      this.dropzone.addEventListener('dragover', (e) => this.handleDragOver(e));
+      this.dropzone.addEventListener('dragleave', (e) => this.handleDragLeave(e));
+      this.dropzone.addEventListener('drop', (e) => this.handleDrop(e));
+
+      // File input change
+      this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+
+      // Preview remove
+      this.previewRemove.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.clearPreview();
       });
 
-      const payload = await response.json();
+      // Form submit
+      this.form.addEventListener('submit', (e) => this.handleSubmit(e));
 
-      if (!response.ok) {
-        resultDiv.innerHTML = payload?.error || "Erreur lors de l'appel a l'API.";
+      // Retry button
+      this.retryBtn.addEventListener('click', () => this.reset());
+      this.resetBtn.addEventListener('click', () => this.reset());
+    }
+
+    handleDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.dropzone.classList.add('dragging');
+    }
+
+    handleDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.dropzone.classList.remove('dragging');
+    }
+
+    handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.dropzone.classList.remove('dragging');
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        this.processFile(files[0]);
+      }
+    }
+
+    handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length > 0) {
+        this.processFile(files[0]);
+      }
+    }
+
+    processFile(file) {
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        this.showError(this.getTranslation('fileTooLarge'));
+        this.fileInput.value = '';
         return;
       }
 
-      if (!payload?.success || !payload?.imageUrl) {
-        resultDiv.innerHTML = payload?.error || "Echec de la generation.";
+      // Validate file format
+      if (!ALLOWED_FORMATS.includes(file.type)) {
+        this.showError(this.getTranslation('invalidFormat'));
+        this.fileInput.value = '';
         return;
       }
 
-      resultDiv.innerHTML =
-        '<img src="' + payload.imageUrl + '" style="max-width:100%;border-radius:8px;" alt="Aper\u00e7u essayage virtuel">' +
-        '<p style="margin-top:10px;font-size:12px;color:#999;text-align:center;line-height:1.4;">' +
-        '\u2728 Aper\u00e7u g\u00e9n\u00e9r\u00e9 par IA \u2014 le rendu r\u00e9el peut l\u00e9g\u00e8rement varier.' +
-        '</p>';
-    } catch (error) {
-      console.error("[TryOn Widget] Error:", error);
-      resultDiv.innerHTML = "Erreur de connexion au serveur. Veuillez r\u00e9essayer.";
-    } finally {
-      clearInterval(timer);
-      form.querySelector("button[type='submit']")?.removeAttribute("disabled");
+      this.selectedFile = file;
+      this.showPreview(file);
+      this.hideError();
     }
-  });
 
-  async function verifyProductAllowed(currentShopId, currentProductId) {
-    try {
-      const response = await fetch(checkProductUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          shop_id: currentShopId,
-          product_id: currentProductId,
-        }),
-      });
-
-      if (!response.ok) {
-        // Distinguish real product-limit errors from server/auth issues
-        if (response.status === 401) {
-          console.error("[TryOn Widget] Session expired or missing — please reopen the app in Shopify admin.");
-          resultDiv.innerHTML = "Session expir\u00e9e. Veuillez r\u00e9ouvrir l\u2019application dans votre admin Shopify puis r\u00e9essayer.";
-          return false;
-        }
-        throw new Error("Unable to verify product status (HTTP " + response.status + ")");
-      }
-
-      const payload = await response.json();
-      return Boolean(payload.allowed);
-    } catch (error) {
-      console.error("[TryOn Widget]", error);
-      resultDiv.innerHTML =
-        "Impossible de v\u00e9rifier le statut de ce produit pour l\u2019instant. Veuillez r\u00e9essayer.";
-      return false;
-    }
-  }
-
-  function toBase64(file) {
-    return new Promise((resolve, reject) => {
+    showPreview(file) {
       const reader = new FileReader();
+      reader.onload = (e) => {
+        this.previewImage.src = e.target.result;
+        this.preview.style.display = 'block';
+        this.dropzone.style.display = 'none';
+        this.dropzone.classList.add('has-preview');
+      };
       reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
+    }
+
+    clearPreview() {
+      this.selectedFile = null;
+      this.fileInput.value = '';
+      this.preview.style.display = 'none';
+      this.dropzone.style.display = 'flex';
+      this.dropzone.classList.remove('has-preview');
+    }
+
+    async handleSubmit(e) {
+      e.preventDefault();
+
+      if (!this.selectedFile) {
+        this.showError('Please select a photo');
+        return;
+      }
+
+      // Check product eligibility
+      try {
+        this.setLoading(true, this.getTranslation('step1'));
+        const allowed = await this.verifyProductAllowed();
+
+        if (!allowed) {
+          this.showError(this.getTranslation('limitReached'));
+          this.setLoading(false);
+          return;
+        }
+
+        // Start try-on process
+        await this.processTryOn();
+      } catch (error) {
+        console.error('[TryOn Widget]', error);
+        this.showError(error.message || this.getTranslation('connectionError'));
+      } finally {
+        this.setLoading(false);
+      }
+    }
+
+    async processTryOn() {
+      this.setState('loading');
+      this.showLoading();
+      this.elapsedSeconds = 0;
+
+      // Animate status text through steps
+      const steps = [
+        this.getTranslation('step1'),
+        this.getTranslation('step2'),
+        this.getTranslation('step3')
+      ];
+
+      let stepIndex = 0;
+      const statusInterval = setInterval(() => {
+        stepIndex = (stepIndex + 1) % steps.length;
+        this.statusTitle.textContent = steps[stepIndex];
+      }, 7000);
+
+      // Update elapsed time
+      const timerInterval = setInterval(() => {
+        this.elapsedSeconds++;
+        this.statusElapsed.textContent = `${this.elapsedSeconds}s`;
+      }, 1000);
+
+      try {
+        // Convert file to base64
+        const personImageBase64 = await this.fileToBase64(this.selectedFile);
+
+        // Call try-on API
+        const response = await fetch(this.tryOnUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-shop-domain': this.shopId
+          },
+          body: JSON.stringify({
+            shop_id: this.shopId,
+            product_id: this.productId,
+            garmentImageUrl: this.garmentImageUrl,
+            personImageBase64,
+            personImageUrl: undefined
+          })
+        });
+
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload?.error || this.getTranslation('connectionError'));
+        }
+
+        if (!payload?.success || !payload?.imageUrl) {
+          throw new Error(payload?.error || 'Failed to generate try-on image');
+        }
+
+        // Show result
+        this.setState('success');
+        this.showResult(payload.imageUrl);
+      } catch (error) {
+        throw error;
+      } finally {
+        clearInterval(statusInterval);
+        clearInterval(timerInterval);
+      }
+    }
+
+    async verifyProductAllowed() {
+      try {
+        const response = await fetch(this.checkProductUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            shop_id: this.shopId,
+            product_id: this.productId
+          })
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error(this.getTranslation('sessionExpired'));
+          }
+          throw new Error(this.getTranslation('connectionError'));
+        }
+
+        const payload = await response.json();
+        return Boolean(payload.allowed);
+      } catch (error) {
+        throw error;
+      }
+    }
+
+    fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    setState(newState) {
+      this.state = newState;
+    }
+
+    setLoading(isLoading, statusText = '') {
+      this.submitBtn.disabled = isLoading;
+      if (isLoading && statusText) {
+        this.statusTitle.textContent = statusText;
+      }
+    }
+
+    showLoading() {
+      this.form.style.display = 'none';
+      this.resultContainer.style.display = 'none';
+      this.errorContainer.style.display = 'none';
+      this.loadingContainer.style.display = 'block';
+    }
+
+    showResult(imageUrl) {
+      this.loadingContainer.style.display = 'none';
+      this.form.style.display = 'none';
+      this.errorContainer.style.display = 'none';
+
+      this.resultImage.src = imageUrl;
+      if (this.showDisclaimer) {
+        this.disclaimerEl.style.display = 'block';
+      }
+      this.resultContainer.style.display = 'block';
+    }
+
+    showError(message) {
+      this.loadingContainer.style.display = 'none';
+      this.resultContainer.style.display = 'none';
+
+      this.errorMessage.textContent = message;
+      this.errorContainer.style.display = 'block';
+
+      this.setState('error');
+    }
+
+    hideError() {
+      this.errorContainer.style.display = 'none';
+    }
+
+    reset() {
+      this.setState('idle');
+      this.clearPreview();
+      this.loadingContainer.style.display = 'none';
+      this.resultContainer.style.display = 'none';
+      this.errorContainer.style.display = 'none';
+      this.form.style.display = 'block';
+      this.submitBtn.disabled = false;
+      this.elapsedSeconds = 0;
+    }
+  }
+
+  // Initialize when DOM is ready
+  function init() {
+    const widgets = document.querySelectorAll('#tryon-widget');
+    widgets.forEach((element) => {
+      new TryOnWidget(element);
     });
   }
-});
+
+  // Expose to global scope for manual initialization
+  window.TryOnWidget = {
+    init
+  };
+
+  // Auto-initialize on DOM ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();

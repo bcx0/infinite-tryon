@@ -155,5 +155,31 @@ export const en = {
       ],
       important: null
     }
+  },
+  settings: {
+    title: "Settings",
+    widgetSettings: "Widget Settings",
+    language: "Widget Language",
+    languageAuto: "Auto (detect from browser)",
+    languageFr: "Français",
+    languageEn: "English",
+    primaryColor: "Primary Color",
+    primaryColorHint: "Choose the main color for the widget",
+    buttonStyle: "Button Style",
+    buttonFilled: "Filled",
+    buttonOutline: "Outline",
+    showDisclaimer: "Show disclaimer on widget",
+    disclaimerHint: "Display additional terms below the widget",
+    accountInfo: "Account Information",
+    shopDomain: "Shop Domain",
+    currentPlan: "Current Plan",
+    memberSince: "Member Since",
+    support: "Support",
+    supportText: "Need help or have questions?",
+    supportEmail: "Contact Support",
+    appVersion: "App Version",
+    save: "Save Settings",
+    saved: "Settings saved successfully!",
+    saveError: "Failed to save settings"
   }
 };
