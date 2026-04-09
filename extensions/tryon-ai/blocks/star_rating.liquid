@@ -25,6 +25,12 @@
     -moz-osx-font-smoothing: grayscale;
     color: var(--tryon-text-primary);
     margin: 30px 0;
+    padding: 0 16px;
+    box-sizing: border-box;
+  }
+
+  #tryon-widget *, #tryon-widget *::before, #tryon-widget *::after {
+    box-sizing: border-box;
   }
 
   .tryon-container {
@@ -129,6 +135,7 @@
     border-radius: 8px;
     display: block;
     margin: 0 auto;
+    object-fit: contain;
   }
 
   .tryon-preview-remove {
@@ -264,9 +271,11 @@
   .tryon-result-image {
     width: 100%;
     height: auto;
+    max-width: 100%;
     border-radius: 10px;
     margin-bottom: 16px;
     display: block;
+    object-fit: contain;
   }
 
   .tryon-disclaimer {
@@ -297,9 +306,31 @@
     border: 1px solid rgba(16, 185, 129, 0.2);
   }
 
+  /* Tablet */
+  @media (max-width: 768px) {
+    #tryon-widget {
+      margin: 24px 0;
+    }
+
+    .tryon-card {
+      padding: 20px;
+    }
+
+    .tryon-title {
+      font-size: 20px;
+    }
+  }
+
+  /* Mobile */
   @media (max-width: 480px) {
+    #tryon-widget {
+      margin: 16px 0;
+      padding: 0 12px;
+    }
+
     .tryon-card {
       padding: 16px;
+      border-radius: 10px;
     }
 
     .tryon-dropzone {
@@ -320,9 +351,45 @@
       font-size: 19px;
     }
 
-    .tryon-button {
-      min-height: 44px;
+    .tryon-subtitle {
       font-size: 13px;
+    }
+
+    .tryon-button {
+      min-height: 48px;
+      font-size: 14px;
+      border-radius: 10px;
+    }
+
+    .tryon-preview-image {
+      max-width: 160px;
+    }
+
+    .tryon-result-image {
+      border-radius: 8px;
+    }
+  }
+
+  /* Small mobile */
+  @media (max-width: 360px) {
+    #tryon-widget {
+      padding: 0 8px;
+    }
+
+    .tryon-card {
+      padding: 12px;
+    }
+
+    .tryon-dropzone {
+      padding: 20px 12px;
+    }
+
+    .tryon-title {
+      font-size: 17px;
+    }
+
+    .tryon-preview-image {
+      max-width: 140px;
     }
   }
 
@@ -366,7 +433,7 @@
         <!-- Preview -->
         <div id="tryon-preview" style="display: none;">
           <div class="tryon-preview-wrapper">
-            <img id="tryon-preview-image" class="tryon-preview-image" alt="Selected photo">
+            <img id="tryon-preview-image" class="tryon-preview-image" alt="Selected photo" width="200" height="300">
             <button type="button" class="tryon-preview-remove" id="tryon-preview-remove" aria-label="Remove photo">✕</button>
           </div>
         </div>
@@ -396,7 +463,7 @@
       <!-- Result state -->
       <div id="tryon-result" style="display: none;">
         <div class="tryon-result-container">
-          <img id="tryon-result-image" class="tryon-result-image" alt="Virtual try-on result">
+          <img id="tryon-result-image" class="tryon-result-image" alt="Virtual try-on result" width="480" height="640">
           <p class="tryon-disclaimer" id="tryon-disclaimer" style="display: none;">AI-generated preview — actual appearance may slightly vary.</p>
           <button type="button" class="tryon-button tryon-button-secondary" id="tryon-retry-btn" style="margin-top: 12px;">
             <span id="retry-text">Try again</span>
